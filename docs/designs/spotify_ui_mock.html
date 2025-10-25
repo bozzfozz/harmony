@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spotify Operations Dashboard – Soulseek Blueprint</title>
+  <style>
+    :root {
+      --bg: radial-gradient(circle at 20% -10%, rgba(30, 215, 96, 0.18), transparent 55%), #080a10;
+      --surface: rgba(14, 17, 24, 0.92);
+      --surface-muted: rgba(18, 23, 32, 0.78);
+      --border: rgba(94, 234, 212, 0.16);
+      --border-strong: rgba(148, 163, 184, 0.22);
+      --accent: #1ed760;
+      --accent-soft: rgba(30, 215, 96, 0.18);
+      --accent-strong: #0f7a39;
+      --secondary: #38bdf8;
+      --secondary-soft: rgba(56, 189, 248, 0.16);
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --text-primary: #f8fafc;
+      --text-secondary: #a5b4c9;
+      --radius-lg: 22px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+      --shadow-hard: 0 26px 54px rgba(3, 7, 13, 0.52);
+      --shadow-soft: 0 14px 32px rgba(8, 12, 20, 0.35);
+      font-family: "Inter", "Manrope", "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text-primary);
+      padding: 48px clamp(24px, 6vw, 72px) 120px;
+      display: flex;
+      flex-direction: column;
+      gap: 44px;
+      line-height: 1.55;
+    }
+
+    header.spotify-header {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .product-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: rgba(15, 17, 23, 0.68);
+      border: 1px solid rgba(94, 234, 212, 0.3);
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #8ef7d9;
+      width: fit-content;
+    }
+
+    header.spotify-header h1 {
+      margin: 0;
+      font-size: clamp(32px, 4.4vw, 46px);
+      letter-spacing: -0.015em;
+    }
+
+    header.spotify-header p {
+      margin: 0;
+      color: var(--text-secondary);
+      max-width: 720px;
+      font-size: 16px;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    .hero-card {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      padding: 24px 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      position: relative;
+      box-shadow: var(--shadow-soft);
+      overflow: hidden;
+    }
+
+    .hero-card.hero-card--search {
+      grid-column: span 2;
+      background: linear-gradient(125deg, rgba(30, 215, 96, 0.28), rgba(12, 16, 22, 0.94));
+      border-color: rgba(30, 215, 96, 0.32);
+    }
+
+    .hero-card.hero-card--search::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 85% 20%, rgba(56, 189, 248, 0.35), transparent 58%);
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+
+    .hero-card.hero-card--search > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-card header {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .hero-card h2 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .hero-card p {
+      margin: 0;
+      color: rgba(233, 248, 240, 0.8);
+      font-size: 15px;
+    }
+
+    .status-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 999px;
+      background: rgba(12, 16, 22, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .pill.accent {
+      background: var(--accent-soft);
+      border-color: rgba(30, 215, 96, 0.45);
+      color: #b8fbcf;
+    }
+
+    .pill.secondary {
+      background: var(--secondary-soft);
+      border-color: rgba(56, 189, 248, 0.45);
+      color: #d0f2ff;
+    }
+
+    .global-search {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      background: rgba(8, 10, 16, 0.64);
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      padding: 16px 20px;
+      box-shadow: inset 0 0 0 1px rgba(30, 215, 96, 0.16);
+    }
+
+    .global-search span[aria-hidden="true"] {
+      font-size: 18px;
+      color: rgba(216, 230, 225, 0.66);
+    }
+
+    .global-search input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 16px;
+      font-weight: 500;
+      outline: none;
+    }
+
+    .global-search input::placeholder {
+      color: rgba(203, 223, 216, 0.7);
+    }
+
+    .global-search button {
+      background: var(--accent);
+      border: none;
+      color: #04150b;
+      font-weight: 600;
+      padding: 12px 22px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .global-search button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 16px 32px rgba(30, 215, 96, 0.25);
+    }
+
+    .search-hints {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font-size: 13px;
+      color: rgba(233, 248, 240, 0.82);
+    }
+
+    .search-hints .hint {
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(12, 18, 26, 0.55);
+      border: 1px solid rgba(30, 215, 96, 0.22);
+      color: #d4ffe6;
+      font-weight: 600;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 14px;
+    }
+
+    .metric {
+      display: grid;
+      gap: 4px;
+      padding: 14px 16px;
+      border-radius: var(--radius-sm);
+      background: rgba(8, 11, 18, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 0 0 1px rgba(30, 215, 96, 0.08);
+    }
+
+    .metric .label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(222, 240, 233, 0.68);
+    }
+
+    .metric .value {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .metric .delta {
+      font-size: 13px;
+      color: #8ef7d9;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .action-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .action-button.primary {
+      background: var(--accent);
+      color: #04150b;
+      box-shadow: 0 16px 32px rgba(30, 215, 96, 0.22);
+    }
+
+    .action-button.secondary {
+      background: rgba(11, 16, 24, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      color: var(--text-primary);
+    }
+
+    .action-button:hover {
+      transform: translateY(-1px);
+    }
+
+    main.layout {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    .page-section {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .page-section--grid {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    }
+
+    .module-card {
+      background: var(--surface-muted);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-strong);
+      padding: 24px 26px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .module-card header {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .module-card h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .module-card p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .chip-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      padding: 7px 14px;
+      border-radius: 999px;
+      background: rgba(24, 30, 42, 0.7);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .chip.active {
+      background: rgba(30, 215, 96, 0.2);
+      color: var(--accent);
+      border-color: rgba(30, 215, 96, 0.45);
+    }
+
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-radius: var(--radius-sm);
+      background: rgba(9, 12, 20, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+
+    .list-item strong {
+      font-size: 16px;
+    }
+
+    .list-item span {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .list-item .action-button {
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      text-transform: none;
+    }
+
+    .module-card--span {
+      grid-column: span 2;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px;
+    }
+
+    .stat-card {
+      display: grid;
+      gap: 6px;
+      padding: 16px 18px;
+      border-radius: var(--radius-sm);
+      background: rgba(9, 12, 20, 0.62);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+    }
+
+    .stat-card .label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(182, 208, 222, 0.72);
+    }
+
+    .stat-card .value {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .pipeline-card {
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .callout {
+      padding: 18px 22px;
+      border-radius: var(--radius-md);
+      background: rgba(56, 189, 248, 0.16);
+      border: 1px solid rgba(56, 189, 248, 0.32);
+      color: #e0f2ff;
+    }
+
+    .callout strong {
+      color: #bfe4ff;
+    }
+
+    .stepper {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      position: relative;
+    }
+
+    .step {
+      background: rgba(8, 12, 20, 0.7);
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      padding: 22px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .step header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .badge {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--secondary);
+    }
+
+    .badge.success {
+      background: rgba(30, 215, 96, 0.2);
+      color: var(--accent);
+    }
+
+    .badge.warning {
+      background: rgba(251, 191, 36, 0.22);
+      color: var(--warning);
+    }
+
+    .step ul {
+      margin: 0;
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      color: var(--text-secondary);
+    }
+
+    .step footer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .step footer .action-button {
+      padding: 10px 18px;
+      font-size: 13px;
+    }
+
+    .insight-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+    }
+
+    .activity-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .activity-item {
+      padding: 16px 18px;
+      border-radius: var(--radius-sm);
+      background: rgba(9, 12, 20, 0.58);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      display: grid;
+      gap: 6px;
+    }
+
+    .activity-item time {
+      font-size: 12px;
+      color: rgba(184, 202, 215, 0.7);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .activity-item strong {
+      font-size: 15px;
+    }
+
+    .activity-item span {
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    @media (min-width: 1200px) {
+      .page-section--grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .module-card--span {
+        grid-column: span 2;
+      }
+    }
+
+    @media (max-width: 960px) {
+      .hero-card.hero-card--search {
+        grid-column: span 1;
+      }
+
+      .hero-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .global-search {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .global-search button {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 36px clamp(18px, 8vw, 32px) 96px;
+      }
+
+      .page-section--grid,
+      .insight-grid {
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="spotify-header">
+    <span class="product-pill">Spotify Operations</span>
+    <h1>Version&nbsp;1.1 Soulseek-Archetyp für das Spotify-Dashboard</h1>
+    <p>
+      Einheitlicher Blueprint mit Hero-Suche, KPI-Metriken und modularen Operations-Karten – identisch zur Soulseek-Konsole,
+      adaptiert auf alle Spotify-Workflows von Playlists über FREE bis Backfill.
+    </p>
+
+    <div class="hero-grid">
+      <div class="hero-card hero-card--search">
+        <header>
+          <h2>Globale Suche</h2>
+          <p>Finde Playlists, Accounts, Runbooks oder Incidents mit einem Query und optionalen Filtern.</p>
+        </header>
+        <form class="global-search" role="search" aria-label="Dashboard-Suche">
+          <span aria-hidden="true">🔍</span>
+          <input type="search" name="query" placeholder="Suche nach Playlists, Accounts oder Alerts" />
+          <button type="submit">Suchen</button>
+        </form>
+        <div class="search-hints">
+          <span>Beliebt:</span>
+          <span class="hint">Playlist Sync Fehler</span>
+          <span class="hint">OAuth Ablaufdatum</span>
+          <span class="hint">FREE Backfill Status</span>
+        </div>
+        <div class="metric-grid">
+          <div class="metric">
+            <span class="label">Letzter Poll</span>
+            <span class="value">vor 14&nbsp;Minuten</span>
+            <span class="delta">↑ 4 Min schneller als SLA</span>
+          </div>
+          <div class="metric">
+            <span class="label">Tokens</span>
+            <span class="value">Gültig bis 22:45</span>
+            <span class="delta">Auto-Renew aktiv</span>
+          </div>
+          <div class="metric">
+            <span class="label">Alert-Level</span>
+            <span class="value">0 kritisch</span>
+            <span class="delta">Letzte 24h ohne Vorfälle</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-card">
+        <header>
+          <h2>Status &amp; Automation</h2>
+          <p>Realtime-Überblick über Scheduler, Polling und aktuelle Operator-Tasks.</p>
+        </header>
+        <div class="status-pills">
+          <span class="pill accent">Scheduler aktiv</span>
+          <span class="pill secondary">Runbook v3.2</span>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-card">
+            <span class="label">Aktive Streams</span>
+            <span class="value">3 FREE · 12 Premium</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Retries</span>
+            <span class="value">0 / 5 genutzt</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Nächster Task</span>
+            <span class="value">Backfill 23:00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-card">
+        <header>
+          <h2>Account &amp; Compliance</h2>
+          <p>Least-Privilege-Scopes, Abonnements und Webhook-Hygiene im Überblick.</p>
+        </header>
+        <div class="stat-grid">
+          <div class="stat-card">
+            <span class="label">Plan</span>
+            <span class="value">Spotify PRO</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Scopes</span>
+            <span class="value">playlist-modify · user-library-read</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Webhook</span>
+            <span class="value">Live · 200 OK</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Observer</span>
+            <span class="value">4 Alerts · alle acknowledged</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-actions">
+      <a class="action-button primary" href="#">OAuth erneuern</a>
+      <a class="action-button secondary" href="#">Runbook öffnen</a>
+      <a class="action-button secondary" href="#">Letzten Poll wiederholen</a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="page-section page-section--grid">
+      <article class="module-card">
+        <header>
+          <span class="pill">Insights</span>
+          <h2>Top-Performer</h2>
+          <p>Vergleiche Streams, Saves und Trendwechsel über die letzten Perioden.</p>
+        </header>
+        <div class="chip-group">
+          <span class="chip active">7 Tage</span>
+          <span class="chip">30 Tage</span>
+          <span class="chip">90 Tage</span>
+        </div>
+        <div class="list">
+          <div class="list-item">
+            <div>
+              <strong>Midnight Echo</strong>
+              <span>Streams ↑12% · Artist Badge</span>
+            </div>
+          </div>
+          <div class="list-item">
+            <div>
+              <strong>Neon Fields</strong>
+              <span>Playlist Sync 100%</span>
+            </div>
+          </div>
+          <div class="list-item">
+            <div>
+              <strong>Parallel Dreams</strong>
+              <span>New Release · High Save Rate</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="module-card">
+        <header>
+          <span class="pill">Queue</span>
+          <h2>Empfehlungen &amp; Seeds</h2>
+          <p>Steuere neue Vorschläge, Seeds und gespeicherte Tracks in einem Workspace.</p>
+        </header>
+        <div class="chip-group">
+          <span class="chip active">Seeds</span>
+          <span class="chip">Saved Tracks</span>
+          <span class="chip">Admin Defaults</span>
+        </div>
+        <div class="list">
+          <div class="list-item">
+            <div>
+              <strong>City Lights</strong>
+              <span>Ähnlich zu Midnight Echo</span>
+            </div>
+            <a class="action-button primary" href="#">Zur Queue</a>
+          </div>
+          <div class="list-item">
+            <div>
+              <strong>Binary Heartbeat</strong>
+              <span>Seed basierend auf Synthwave</span>
+            </div>
+            <a class="action-button secondary" href="#">Details</a>
+          </div>
+          <div class="list-item">
+            <div>
+              <strong>Arcade Nights</strong>
+              <span>Admin Default · 2&nbsp;Tage alt</span>
+            </div>
+            <a class="action-button primary" href="#">In Playlist</a>
+          </div>
+        </div>
+      </article>
+
+      <article class="module-card module-card--span">
+        <header>
+          <span class="pill">Health</span>
+          <h2>Realtime Signals</h2>
+          <p>Monitoring für Sync-Jobs, API-Limits und automatisierte Safeguards.</p>
+        </header>
+        <div class="stat-grid">
+          <div class="stat-card">
+            <span class="label">API Limit</span>
+            <span class="value">55% genutzt</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Upload Queue</span>
+            <span class="value">12 Items · 2 Retries</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Automation</span>
+            <span class="value">4 aktive Regeln</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Audit Trail</span>
+            <span class="value">Letzter Change vor 6 Min</span>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="page-section">
+      <article class="module-card pipeline-card">
+        <header>
+          <span class="pill">Pipeline</span>
+          <h2>Playlists → FREE → Backfill</h2>
+          <p>Visuelle Stepper-Darstellung für Status, KPIs und operative Aktionen.</p>
+        </header>
+        <div class="callout">
+          <strong>Operator Hinweis:</strong> Jeder Schritt liefert SLA, nächste Ausführung und Retry-Optionen im Einklang mit dem
+          Soulseek-Archetyp.
+        </div>
+        <div class="stepper">
+          <div class="step">
+            <header>
+              <h3>1 · Playlists synchronisieren</h3>
+              <span class="badge success">grün</span>
+            </header>
+            <ul>
+              <li>Letzter Sync vor 18 Minuten · 0 Warnungen</li>
+              <li>4 Playlists mit QA-Tags · 1 zur Überprüfung</li>
+              <li>Webhook bestätigt · 200 OK</li>
+            </ul>
+            <footer>
+              <a class="action-button primary" href="#">Sync erneut starten</a>
+              <a class="action-button secondary" href="#">Filter anpassen</a>
+            </footer>
+          </div>
+
+          <div class="step">
+            <header>
+              <h3>2 · FREE Ingest</h3>
+              <span class="badge warning">Warnung</span>
+            </header>
+            <ul>
+              <li>Upload-Queue mit 12 Items · 2 Retries offen</li>
+              <li>Durchsatz 210 Tracks/h · Ziel 250</li>
+              <li>Retry-Backoff aktiv · nächster Versuch in 4 Min</li>
+            </ul>
+            <footer>
+              <a class="action-button primary" href="#">Upload priorisieren</a>
+              <a class="action-button secondary" href="#">Fehlerprotokoll</a>
+            </footer>
+          </div>
+
+          <div class="step">
+            <header>
+              <h3>3 · Backfill &amp; QA</h3>
+              <span class="badge">geplant</span>
+            </header>
+            <ul>
+              <li>Nächster Lauf um 23:00 · SLA 2h</li>
+              <li>Letztes Backfill-Ergebnis: 98,4&nbsp;% Coverage</li>
+              <li>2 Items für manuelle QA markiert</li>
+            </ul>
+            <footer>
+              <a class="action-button primary" href="#">Backfill jetzt starten</a>
+              <a class="action-button secondary" href="#">Runbook ansehen</a>
+            </footer>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="page-section">
+      <article class="module-card">
+        <header>
+          <span class="pill">Activity</span>
+          <h2>Letzte Aktionen</h2>
+          <p>Chronologisches Audit der wichtigsten Operator-Eingriffe und Alerts.</p>
+        </header>
+        <ul class="activity-list">
+          <li class="activity-item">
+            <time>18:42</time>
+            <strong>OAuth Refresh erfolgreich</strong>
+            <span>Token für account_ops verlängert · nächste Prüfung um 22:45</span>
+          </li>
+          <li class="activity-item">
+            <time>18:11</time>
+            <strong>FREE Upload Retry</strong>
+            <span>2 Tracks erneut gesendet · Status beobachtet</span>
+          </li>
+          <li class="activity-item">
+            <time>17:58</time>
+            <strong>Playlist Sync abgeschlossen</strong>
+            <span>12 Playlists aktualisiert · 1 QA-Flag erstellt</span>
+          </li>
+        </ul>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
