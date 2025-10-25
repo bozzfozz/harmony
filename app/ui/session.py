@@ -282,7 +282,9 @@ class UiSessionManager:
             last_seen_at=issued_at,
         )
         async with self._lock:
-            self._store.create_session(self._stored_from_session(session))
+            await self._store.create_session_async(
+                self._stored_from_session(session)
+            )
         log_event(
             logger,
             "ui.login",
@@ -296,11 +298,11 @@ class UiSessionManager:
 
     async def get_session(self, identifier: str) -> UiSession | None:
         async with self._lock:
-            return self._get_active_session(identifier)
+            return await self._get_active_session(identifier)
 
     async def invalidate(self, identifier: str, *, reason: str = "logout") -> None:
         async with self._lock:
-            stored = self._store.delete_session(identifier)
+            stored = await self._store.delete_session_async(identifier)
         if stored is not None:
             _record_session_termination(self._session_from_stored(stored), reason=reason)
 
@@ -309,7 +311,7 @@ class UiSessionManager:
 
     async def get_spotify_free_ingest_job_id(self, identifier: str) -> str | None:
         async with self._lock:
-            session = self._get_active_session(identifier)
+            session = await self._get_active_session(identifier)
             if session is None:
                 return None
             return session.jobs.spotify_free_ingest_job_id
@@ -322,10 +324,12 @@ class UiSessionManager:
         session: UiSession | None = None,
     ) -> None:
         async with self._lock:
-            active_session = self._get_active_session(identifier)
+            active_session = await self._get_active_session(identifier)
             if active_session is None:
                 return
-            if not self._store.set_spotify_free_ingest_job_id(identifier, job_id):
+            if not await self._store.set_spotify_free_ingest_job_id_async(
+                identifier, job_id
+            ):
                 return
             active_session.jobs.spotify_free_ingest_job_id = job_id
             if session is not None and session is not active_session:
@@ -333,7 +337,7 @@ class UiSessionManager:
 
     async def get_spotify_backfill_job_id(self, identifier: str) -> str | None:
         async with self._lock:
-            session = self._get_active_session(identifier)
+            session = await self._get_active_session(identifier)
             if session is None:
                 return None
             return session.jobs.spotify_backfill_job_id
@@ -346,10 +350,12 @@ class UiSessionManager:
         session: UiSession | None = None,
     ) -> None:
         async with self._lock:
-            active_session = self._get_active_session(identifier)
+            active_session = await self._get_active_session(identifier)
             if active_session is None:
                 return
-            if not self._store.set_spotify_backfill_job_id(identifier, job_id):
+            if not await self._store.set_spotify_backfill_job_id_async(
+                identifier, job_id
+            ):
                 return
             active_session.jobs.spotify_backfill_job_id = job_id
             if session is not None and session is not active_session:
@@ -362,10 +368,10 @@ class UiSessionManager:
         session: UiSession | None = None,
     ) -> None:
         async with self._lock:
-            active_session = self._get_active_session(identifier)
+            active_session = await self._get_active_session(identifier)
             if active_session is None:
                 return
-            if not self._store.clear_job_state(identifier):
+            if not await self._store.clear_job_state_async(identifier):
                 return
             active_session.jobs.spotify_free_ingest_job_id = None
             active_session.jobs.spotify_backfill_job_id = None
@@ -421,18 +427,18 @@ class UiSessionManager:
     def _is_expired(self, session: UiSession) -> bool:
         return session.last_seen_at + self._session_ttl < datetime.now(tz=UTC)
 
-    def _get_active_session(self, identifier: str) -> UiSession | None:
-        stored = self._store.get_session(identifier)
+    async def _get_active_session(self, identifier: str) -> UiSession | None:
+        stored = await self._store.get_session_async(identifier)
         if stored is None:
             return None
         session = self._session_from_stored(stored)
         if self._is_expired(session):
-            removed = self._store.delete_session(identifier)
+            removed = await self._store.delete_session_async(identifier)
             if removed is not None:
                 _record_session_termination(self._session_from_stored(removed), reason="expired")
             return None
         now = datetime.now(tz=UTC)
-        self._store.update_last_seen(identifier, now)
+        await self._store.update_last_seen_async(identifier, now)
         session.last_seen_at = now
         return session
 
