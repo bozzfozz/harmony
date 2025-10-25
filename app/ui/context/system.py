@@ -37,6 +37,16 @@ from .base import (
     _safe_url_for,
     _system_status_badge,
 )
+
+
+def _resolve_system_navigation_key(session: UiSession) -> str:
+    """Determine which primary navigation item should be active for system pages."""
+
+    if session.allows("admin"):
+        return "admin"
+    if session.allows("operator"):
+        return "operations"
+    return "home"
 def _build_secret_cards(*, can_validate: bool) -> tuple[SecretValidationCard, ...]:
     providers = (
         (
@@ -128,7 +138,9 @@ def build_system_page_context(
     layout = LayoutContext(
         page_id="system",
         role=session.role,
-        navigation=_build_primary_navigation(session, active="admin"),
+        navigation=_build_primary_navigation(
+            session, active=_resolve_system_navigation_key(session)
+        ),
         head_meta=(MetaTag(name="csrf-token", content=csrf_token),),
     )
 

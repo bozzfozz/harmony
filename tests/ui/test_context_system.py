@@ -72,6 +72,17 @@ def test_build_system_page_context_marks_secret_cards_for_non_admin() -> None:
     assert all(not card.can_validate for card in cards)
 
 
+def test_build_system_page_context_marks_operations_tab_active_for_operator() -> None:
+    request = _make_request()
+    session = _make_session(role="operator")
+
+    context = build_system_page_context(request, session=session, csrf_token="token")
+
+    navigation = context["layout"].navigation.primary
+    assert any(item.href == "/ui/operations" and item.active for item in navigation)
+    assert not any(item.href == "/ui/admin" and item.active for item in navigation)
+
+
 def test_build_system_page_context_uses_metrics_proxy_route() -> None:
     request = _make_request()
     session = _make_session()
