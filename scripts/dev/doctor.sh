@@ -117,8 +117,8 @@ check_directory() {
   log_pass "$label directory ready ($path)"
 }
 
-check_directory DOWNLOADS_DIR /data/downloads "downloads"
-check_directory MUSIC_DIR /data/music "music"
+check_directory DOWNLOADS_DIR /downloads "downloads"
+check_directory MUSIC_DIR /music "music"
 
 if [[ -n "$PYTHON_BIN" ]]; then
   if output=$($PYTHON_BIN -m pip check 2>&1); then

@@ -12,9 +12,9 @@ the canonical entrypoint for automating library updates.
 2. **Acquisition** – Workers communicate with Spotify and slskd to match desired tracks,
    request downloads and monitor job status. All network calls honour the provider
    timeout and retry policies defined in configuration.
-3. **Tagging & Enrichment** – After the payload reaches `/data/downloads`, HDM invokes
+3. **Tagging & Enrichment** – After the payload reaches `/downloads`, HDM invokes
    metadata, artwork and lyrics processors (when enabled) to embed complete tags before
-   promoting files into `/data/music`.
+   promoting files into `/music`.
 4. **Movement & Deduplication** – The `AtomicFileMover` ensures durable moves within or
    across filesystems. Deduplication guards skip already ingested tracks and keep a
    persistent audit trail.
@@ -42,9 +42,9 @@ no separate services are required.
   completed tracks. Deployments can fall back to the in-memory backend for
   ephemeral test runs.
 - Volume expectations:
-  - `/data/downloads` must support writes, renames and `fsync`. Cross-device moves
+  - `/downloads` must support writes, renames and `fsync`. Cross-device moves
     trigger copy-and-rename fallbacks handled by HDM.
-  - `/data/music` must be writable by the container user (configurable via `PUID`/`PGID`).
+  - `/music` must be writable by the container user (configurable via `PUID`/`PGID`).
 - Readiness gating: HDM delays worker startup until the readiness checks pass to avoid
   running against half-configured providers.
 - Structured logs use the `hdm.*` namespaces for easy filtering. Key events include

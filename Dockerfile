@@ -7,7 +7,9 @@ ENV PYTHONUNBUFFERED=1 \
     APP_PORT=8080 \
     APP_MODULE=app.main:app \
     PUID=1000 \
-    PGID=1000
+    PGID=1000 \
+    DOWNLOADS_DIR=/downloads \
+    MUSIC_DIR=/music
 
 WORKDIR /app
 

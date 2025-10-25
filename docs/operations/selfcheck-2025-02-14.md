@@ -1,7 +1,7 @@
 # Self-check run — 2025-02-14
 
 ## Environment preparation
-- Created persistent directories `/data`, `/data/downloads`, `/data/music` and provisioned an empty SQLite database at `/data/harmony.db` to mirror the production volume layout.
+- Created persistent directories `/data`, `/downloads`, `/music` and provisioned an empty SQLite database at `/data/harmony.db` to mirror the production volume layout.
 - Launched a temporary HTTP server on `127.0.0.1:5030` to satisfy the Soulseekd TCP probe.
 - Network egress is blocked, preventing `pip install -r requirements.txt`. Provided lightweight runtime stubs for `sqlalchemy` and `aiosqlite` via `PYTHONPATH=/tmp/harmony_stubs` so the guard could execute offline.
 
@@ -12,8 +12,8 @@ DATABASE_URL=sqlite+aiosqlite:///data/harmony.db \
 SPOTIFY_CLIENT_ID=dummy-client \
 SPOTIFY_CLIENT_SECRET=dummy-secret \
 OAUTH_SPLIT_MODE=false \
-DOWNLOADS_DIR=/data/downloads \
-MUSIC_DIR=/data/music \
+DOWNLOADS_DIR=/downloads \
+MUSIC_DIR=/music \
 HARMONY_API_KEY=test-key \
 SLSKD_BASE_URL=http://127.0.0.1:5030 \
 PYTHONPATH=/tmp/harmony_stubs \
@@ -30,8 +30,8 @@ DATABASE_URL=sqlite+aiosqlite:///data/harmony.db \
 SPOTIFY_CLIENT_ID=dummy-client \
 SPOTIFY_CLIENT_SECRET=dummy-secret \
 OAUTH_SPLIT_MODE=false \
-DOWNLOADS_DIR=/data/downloads \
-MUSIC_DIR=/data/music \
+DOWNLOADS_DIR=/downloads \
+MUSIC_DIR=/music \
 HARMONY_API_KEY=test-key \
 SLSKD_BASE_URL=http://127.0.0.1:5030 \
 PYTHONPATH=/tmp/harmony_stubs \

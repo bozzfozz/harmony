@@ -24,7 +24,7 @@ persists all state in a single SQLite database that ships inside the container i
 1. API clients or the web UI create jobs (watchlist entries, ingest batches, manual
    downloads) via authenticated HTTP calls.
 2. HDM orchestrates the jobs, talks to the provider integrations and writes downloads
-   into `/data/downloads` before promoting validated tracks into `/data/music`.
+   into `/downloads` before promoting validated tracks into `/music`.
 3. Post-processing workers enrich the tracks (metadata, lyrics, artwork) and expose the
    results through API endpoints and the UI.
 4. Health and observability surfaces expose system readiness, HDM queues and
