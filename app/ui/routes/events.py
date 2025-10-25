@@ -14,13 +14,16 @@ from app.ui.context.operations import (
     build_activity_fragment_context,
     build_watchlist_fragment_context,
 )
+from app.ui.csrf import attach_csrf_cookie
 from app.ui.routes.shared import (
     _LIVE_UPDATES_SSE,
     _LiveFragmentBuilder,
+    _ensure_csrf_token,
     _resolve_live_updates_mode,
     _ui_event_stream,
     logger,
     templates,
+    get_csrf_manager,
 )
 from app.ui.services import (
     ActivityUiService,
@@ -53,7 +56,8 @@ async def ui_events(
             detail="Live updates via SSE are disabled.",
         )
 
-    csrf_token = request.cookies.get("csrftoken", "")
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
 
     def _render_fragment(
         event_name: str,
@@ -156,7 +160,10 @@ async def ui_events(
         "Cache-Control": "no-cache",
         "X-Accel-Buffering": "no",
     }
-    return StreamingResponse(stream, media_type="text/event-stream", headers=headers)
+    response = StreamingResponse(stream, media_type="text/event-stream", headers=headers)
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 __all__ = ["router"]

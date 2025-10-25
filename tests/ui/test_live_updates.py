@@ -1,5 +1,6 @@
 import asyncio
 import json
+from http.cookies import SimpleCookie
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -9,6 +10,7 @@ from app.db import get_session, session_scope
 from app.models import Download
 from app.services.download_service import DownloadService
 from app.ui.context.downloads import build_downloads_fragment_context
+from app.ui.routes import events as events_routes
 from app.ui.routes.shared import _LiveFragmentBuilder, _ui_event_stream, templates
 from app.ui.services import (
     ActivityPage,
@@ -332,6 +334,122 @@ def test_ui_events_stream_contains_fragment_markup(monkeypatch) -> None:
     assert "<div" in html
     assert "list" in watchlist_stub.async_calls
     assert activity_stub.async_calls, "expected async list_activity to be invoked"
+
+
+def test_ui_events_stream_sets_csrf_cookie_when_missing(monkeypatch) -> None:
+    class _StubDownloadsService:
+        async def list_downloads_async(
+            self,
+            *,
+            limit: int,
+            offset: int,
+            include_all: bool,
+            status_filter: str | None,
+        ) -> DownloadPage:
+            return DownloadPage(
+                items=(),
+                limit=limit,
+                offset=offset,
+                has_next=False,
+                has_previous=False,
+            )
+
+    class _StubJobsService:
+        async def list_jobs(self, request: Any) -> tuple[Any, ...]:
+            return ()
+
+    class _StubWatchlistService:
+        async def list_entries_async(self, request: Any) -> WatchlistTable:
+            await asyncio.sleep(0)
+            return WatchlistTable(entries=())
+
+    class _StubActivityService:
+        async def list_activity_async(
+            self,
+            *,
+            limit: int,
+            offset: int,
+            type_filter: str | None,
+            status_filter: str | None,
+        ) -> ActivityPage:
+            await asyncio.sleep(0)
+            return ActivityPage(
+                items=(),
+                limit=limit,
+                offset=offset,
+                total_count=0,
+                type_filter=type_filter,
+                status_filter=status_filter,
+            )
+
+    overrides = {
+        get_downloads_ui_service: lambda: _StubDownloadsService(),
+        get_jobs_ui_service: lambda: _StubJobsService(),
+        get_watchlist_ui_service: lambda: _StubWatchlistService(),
+        get_activity_ui_service: lambda: _StubActivityService(),
+    }
+
+    captured_payloads: list[dict[str, Any]] = []
+
+    async def _capture_stream(request: Any, builders: list[_LiveFragmentBuilder]):
+        for builder in builders:
+            payload = await builder.build()
+            if not payload:
+                continue
+            captured_payloads.append(payload)
+            data = json.dumps(payload, ensure_ascii=False)
+            yield f"event: fragment\ndata: {data}\n\n"
+
+    monkeypatch.setattr("app.ui.routes.events._ui_event_stream", _capture_stream)
+
+    original_downloads_context = events_routes.build_downloads_fragment_context
+    original_watchlist_context = events_routes.build_watchlist_fragment_context
+
+    captured_download_tokens: list[str | None] = []
+    captured_watchlist_tokens: list[str | None] = []
+
+    def _capture_downloads_context(*args: Any, **kwargs: Any):
+        captured_download_tokens.append(kwargs.get("csrf_token"))
+        return original_downloads_context(*args, **kwargs)
+
+    def _capture_watchlist_context(*args: Any, **kwargs: Any):
+        captured_watchlist_tokens.append(kwargs.get("csrf_token"))
+        return original_watchlist_context(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "app.ui.routes.events.build_downloads_fragment_context",
+        _capture_downloads_context,
+    )
+    monkeypatch.setattr(
+        "app.ui.routes.events.build_watchlist_fragment_context",
+        _capture_watchlist_context,
+    )
+
+    with _create_client(monkeypatch, extra_env={"UI_LIVE_UPDATES": "SSE"}) as client:
+        try:
+            client.app.dependency_overrides.update(overrides)
+            _login(client)
+            if "csrftoken" in client.cookies:
+                client.cookies.pop("csrftoken")
+
+            response = client.get("/ui/events")
+            assert response.status_code == 200
+
+            set_cookie_headers = response.headers.get_list("set-cookie")
+            assert set_cookie_headers, "expected Set-Cookie header with new CSRF token"
+            cookie_parser = SimpleCookie()
+            for header in set_cookie_headers:
+                cookie_parser.load(header)
+            assert "csrftoken" in cookie_parser, "csrftoken cookie not issued"
+            issued_token = cookie_parser["csrftoken"].value
+        finally:
+            client.app.dependency_overrides.clear()
+
+    assert captured_payloads, "expected SSE payloads to be captured"
+    assert any(captured_download_tokens), "expected downloads context to capture CSRF token"
+    assert any(captured_watchlist_tokens), "expected watchlist context to capture CSRF token"
+    assert all(token == issued_token for token in captured_download_tokens if token)
+    assert all(token == issued_token for token in captured_watchlist_tokens if token)
 
 
 def test_ui_events_stream_omits_dlq_fragments_when_flag_disabled(monkeypatch) -> None:
