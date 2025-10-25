@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT_DIR"
 
+WHEEL_CACHE_DIR=${UI_SMOKE_WHEEL_DIR:-$ROOT_DIR/.cache/ui-smoke-wheels}
+
 if ! command -v python >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
   echo "python is required to run UI smoke checks." >&2
   exit 1
@@ -15,15 +17,49 @@ else
   PYTHON_BIN=python3
 fi
 
-if ! $PYTHON_BIN -c "import uvicorn" >/dev/null 2>&1; then
-  echo "uvicorn is required. Install backend dependencies via 'pip install -r requirements.txt'." >&2
-  exit 1
-fi
+ensure_runtime_dependency() {
+  local module=$1
+  local requirement=$2
 
-if ! $PYTHON_BIN -c "import httpx" >/dev/null 2>&1; then
-  echo "httpx is required. Install backend dependencies via 'pip install -r requirements.txt'." >&2
+  if $PYTHON_BIN -c "import ${module}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local cache_has_artifacts=0
+  if [[ -d "$WHEEL_CACHE_DIR" ]] && compgen -G "$WHEEL_CACHE_DIR/*" >/dev/null 2>&1; then
+    cache_has_artifacts=1
+  fi
+
+  if [[ $cache_has_artifacts -eq 1 ]]; then
+    echo "Installing ${requirement} from cached wheels in $WHEEL_CACHE_DIR" >&2
+    if "$PYTHON_BIN" -m pip install --no-index --find-links="$WHEEL_CACHE_DIR" "$requirement"; then
+      if $PYTHON_BIN -c "import ${module}" >/dev/null 2>&1; then
+        return 0
+      fi
+      echo "Installed ${requirement} from cache but the ${module} module is still unavailable." >&2
+    else
+      echo "Failed to install ${requirement} from cache. Falling back to PyPI." >&2
+    fi
+  fi
+
+  echo "Attempting to install ${requirement} from PyPI." >&2
+  if "$PYTHON_BIN" -m pip install "$requirement"; then
+    if $PYTHON_BIN -c "import ${module}" >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+
+  cat >&2 <<ERROR
+Unable to import ${module}. Please ensure the dependency is available.
+If network access is restricted, pre-download the runtime wheels using
+  scripts/dev/cache_ui_smoke_wheels.sh
+and set UI_SMOKE_WHEEL_DIR to point at the cache.
+ERROR
   exit 1
-fi
+}
+
+ensure_runtime_dependency uvicorn "uvicorn==0.30.1"
+ensure_runtime_dependency httpx "httpx==0.27.0"
 
 readarray -t RUNTIME_VALUES < <($PYTHON_BIN <<'PY'
 from app.config import load_runtime_env, resolve_app_port
