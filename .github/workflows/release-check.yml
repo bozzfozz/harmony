@@ -58,6 +58,19 @@ jobs:
           make release-check |& tee reports/release-check/release-check.log
           git diff --exit-code
 
+      - name: Verify packaging pipeline
+        run: |
+          set -euo pipefail
+          make package-verify
+
+      - name: Upload packaging artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-packaging-artifacts
+          path: dist/
+          if-no-files-found: warn
+
       - name: Upload release-check logs
         if: always()
         uses: actions/upload-artifact@v4
