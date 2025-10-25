@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request, Response, status
 
+from app.api import system as system_api
 from app.db import SessionFactory
 from app.dependencies import get_session_factory
 from app.errors import AppError
@@ -49,6 +50,20 @@ async def system_page(
     )
     if issued:
         attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
+
+
+@router.get(
+    "/system/metrics",
+    include_in_schema=False,
+    name="system_metrics_proxy",
+)
+async def system_metrics(
+    request: Request,
+    session: UiSession = Depends(require_role("operator")),
+) -> Response:
+    _ = session
+    response = await system_api.get_metrics(request)
     return response
 
 
