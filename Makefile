@@ -46,27 +46,27 @@ all:
 		$(MAKE) smoke
 
 release-check:
-        @set -euo pipefail; \
-                $(MAKE) all; \
-                $(MAKE) docs-verify; \
-                $(MAKE) pip-audit; \
-                $(MAKE) ui-smoke
+	@set -euo pipefail; \
+		$(MAKE) all; \
+		$(MAKE) docs-verify; \
+		$(MAKE) pip-audit; \
+		$(MAKE) ui-smoke
 
 package-verify:
-        @python scripts/dev/package_verify.py
+	@python scripts/dev/package_verify.py
 
 lint-fix:
 	@set -euo pipefail; \
-	while true; do \
-		before="$$(git diff --binary | sha256sum | awk '{print $$1}')"; \
-		ruff format .; \
-		ruff check --select I --fix .; \
-		ruff check --fix .; \
-		after="$$(git diff --binary | sha256sum | awk '{print $$1}')"; \
-		if [ "$$before" = "$$after" ]; then \
-			break; \
-		fi; \
-		done
+		while true; do \
+			before="$$(git diff --binary | sha256sum | awk '{print $$1}')"; \
+			ruff format .; \
+			ruff check --select I --fix .; \
+			ruff check --fix .; \
+			after="$$(git diff --binary | sha256sum | awk '{print $$1}')"; \
+			if [ "$$before" = "$$after" ]; then \
+				break; \
+			fi; \
+			done
 
 precommit:
 	@if command -v pre-commit >/dev/null 2>&1; then \
