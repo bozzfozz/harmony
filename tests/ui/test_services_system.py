@@ -120,7 +120,7 @@ async def test_fetch_integrations_sorts_providers(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_validate_secret_translates_envelope(monkeypatch) -> None:
-    async def fake_validate(provider, request, payload, session):  # noqa: ARG001
+    async def fake_validate(provider, request, payload, session_factory):  # noqa: ARG001
         validated = SimpleNamespace(
             mode="live", valid=True, at=payload.value or object(), reason=None, note="OK"
         )
@@ -134,7 +134,7 @@ async def test_validate_secret_translates_envelope(monkeypatch) -> None:
         _make_request(),
         provider="Spotify",
         override="token",
-        session=SimpleNamespace(),
+        session_factory=lambda: SimpleNamespace(),
     )
 
     assert isinstance(record, SecretValidationRecord)

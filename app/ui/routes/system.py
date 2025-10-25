@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request, Response, status
-from sqlalchemy.orm import Session
 
-from app.dependencies import get_db
+from app.db import SessionFactory
+from app.dependencies import get_session_factory
 from app.errors import AppError
 from app.ui.context.system import (
     attach_secret_result,
@@ -251,7 +251,7 @@ async def system_validate_secret(
     request: Request,
     session: UiSession = Depends(require_role("admin")),
     service: SystemUiService = Depends(get_system_ui_service),
-    db_session: Session = Depends(get_db),
+    session_factory: SessionFactory = Depends(get_session_factory),
 ) -> Response:
     cards = build_system_secret_cards()
     base_card = select_system_secret_card(cards, provider)
@@ -273,7 +273,7 @@ async def system_validate_secret(
             request,
             provider=provider,
             override=override_value,
-            session=db_session,
+            session_factory=session_factory,
         )
     except AppError as exc:
         message = exc.message or "Secret validation failed."

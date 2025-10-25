@@ -86,7 +86,14 @@ class _StubSystemService:
     async def fetch_service_badges(self):
         return self.badges
 
-    async def validate_secret(self, request, *, provider: str, override: str | None, session):
+    async def validate_secret(
+        self,
+        request,
+        *,
+        provider: str,
+        override: str | None,
+        session_factory,
+    ):
         return self.secret_result
 
 

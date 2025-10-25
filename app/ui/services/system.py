@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from starlette.responses import Response as StarletteResponse
 
 from app.api import health as health_api, system as system_api
-from app.db import run_session
+from app.db import SessionFactory, run_session
 from app.dependencies import get_integration_service
 from app.errors import AppError, ErrorCode
 from app.logging import get_logger
@@ -272,14 +272,14 @@ class SystemUiService:
         *,
         provider: str,
         override: str | None,
-        session: Session,
+        session_factory: SessionFactory,
     ) -> SecretValidationRecord:
         payload = system_api.SecretValidationRequest(value=override)
         envelope = await system_api.validate_secret(
             provider,
             request,
             payload,
-            session=session,
+            session_factory=session_factory,
         )
         if not envelope.ok or envelope.data is None:
             logger.warning(

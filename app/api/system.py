@@ -14,16 +14,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
-from app.db import session_scope
-from app.dependencies import get_db
+from app.db import SessionFactory, session_scope
+from app.dependencies import get_session_factory
 from app.errors import DependencyError
 from app.logging import get_logger
 from app.models import Download, QueueJob, QueueJobStatus
 from app.ops.selfcheck import aggregate_ready
 from app.services.health import HealthService
-from app.services.secret_store import SecretStore
+from app.services.secret_store import load_secret_store
 from app.services.secret_validation import (
     SecretValidationResult,
     SecretValidationService,
@@ -212,10 +211,10 @@ async def validate_secret(
     provider: str,
     request: Request,
     payload: SecretValidationRequest | None = None,
-    session: Session = Depends(get_db),
+    session_factory: SessionFactory = Depends(get_session_factory),
 ) -> SecretValidationEnvelope:
     service = _get_secret_validation_service(request)
-    store = SecretStore(session)
+    store = await load_secret_store(session_factory=session_factory)
     normalized_provider = provider.strip().lower()
     override_value = payload.value if payload is not None else None
     result: SecretValidationResult = await service.validate(
