@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, TypeVar
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from app.dependencies import get_db
+from app.db import SessionCallable, run_session
+from app.dependencies import get_db, get_session_runner
 from app.logging import get_logger
 from app.routers.settings_router import (
     get_artist_preferences as fetch_artist_preferences,
@@ -26,6 +28,10 @@ from app.schemas import (
 )
 
 logger = get_logger(__name__)
+
+T = TypeVar("T")
+
+SessionRunner = Callable[[SessionCallable[T]], Awaitable[T]]
 
 
 @dataclass(slots=True)
@@ -69,54 +75,61 @@ class ArtistPreferenceTable:
 class SettingsUiService:
     """Facade for orchestrating settings UI interactions."""
 
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self,
+        *,
+        session: Session,
+        session_runner: SessionRunner[Any] | None = None,
+    ) -> None:
         self._session = session
 
+        async def default_runner(func: SessionCallable[Any]) -> Any:
+            return await run_session(func)
+
+        self._run_session: SessionRunner[Any] = session_runner or default_runner
+
     def list_settings(self) -> SettingsOverview:
-        response = fetch_settings(session=self._session)
-        overview = self._build_overview(response)
-        logger.debug(
-            "settings.ui.list",
-            extra={"count": len(overview.rows)},
-        )
+        overview = self._list_settings(self._session)
+        self._log_settings_overview(overview)
+        return overview
+
+    async def list_settings_async(self) -> SettingsOverview:
+        overview = await self._run_session(self._list_settings)
+        self._log_settings_overview(overview)
         return overview
 
     def save_setting(self, *, key: str, value: str | None) -> SettingsOverview:
-        payload = SettingsPayload(key=key, value=value)
-        response = persist_setting(payload=payload, session=self._session)
-        overview = self._build_overview(response)
-        logger.info(
-            "settings.ui.save",
-            extra={"key": key, "has_value": value is not None},
-        )
+        overview = self._save_setting(self._session, key=key, value=value)
+        self._log_setting_saved(key, value)
+        return overview
+
+    async def save_setting_async(self, *, key: str, value: str | None) -> SettingsOverview:
+        def operation(session: Session) -> SettingsOverview:
+            return self._save_setting(session, key=key, value=value)
+
+        overview = await self._run_session(operation)
+        self._log_setting_saved(key, value)
         return overview
 
     def list_history(self) -> SettingsHistoryTable:
-        history = fetch_history(session=self._session)
-        rows = tuple(
-            SettingsHistoryRow(
-                key=entry.key,
-                old_value=entry.old_value,
-                new_value=entry.new_value,
-                changed_at=entry.changed_at,
-            )
-            for entry in history.history
-        )
-        logger.debug("settings.ui.history", extra={"count": len(rows)})
-        return SettingsHistoryTable(rows=rows)
+        table = self._list_history(self._session)
+        self._log_history(table)
+        return table
+
+    async def list_history_async(self) -> SettingsHistoryTable:
+        table = await self._run_session(self._list_history)
+        self._log_history(table)
+        return table
 
     def list_artist_preferences(self) -> ArtistPreferenceTable:
-        preferences = fetch_artist_preferences(session=self._session)
-        rows = tuple(
-            ArtistPreferenceRow(
-                artist_id=entry.artist_id,
-                release_id=entry.release_id,
-                selected=entry.selected,
-            )
-            for entry in preferences.preferences
-        )
-        logger.debug("settings.ui.artist_preferences", extra={"count": len(rows)})
-        return ArtistPreferenceTable(rows=rows)
+        table = self._list_artist_preferences(self._session)
+        self._log_artist_preferences(table)
+        return table
+
+    async def list_artist_preferences_async(self) -> ArtistPreferenceTable:
+        table = await self._run_session(self._list_artist_preferences)
+        self._log_artist_preferences(table)
+        return table
 
     def add_or_update_artist_preference(
         self,
@@ -125,28 +138,33 @@ class SettingsUiService:
         release_id: str,
         selected: bool,
     ) -> ArtistPreferenceTable:
-        current = self._load_artist_preferences()
-        key = (artist_id, release_id)
-        entries: dict[tuple[str, str], ArtistPreferenceEntry] = {
-            (row.artist_id, row.release_id): ArtistPreferenceEntry(
-                artist_id=row.artist_id,
-                release_id=row.release_id,
-                selected=row.selected,
-            )
-            for row in current
-        }
-        entries[key] = ArtistPreferenceEntry(
+        table = self._add_or_update_artist_preference(
+            self._session,
             artist_id=artist_id,
             release_id=release_id,
             selected=selected,
         )
-        payload = ArtistPreferencesPayload(preferences=list(entries.values()))
-        persist_artist_preferences(payload=payload, session=self._session)
-        logger.info(
-            "settings.ui.artist_preferences.save",
-            extra={"artist_id": artist_id, "release_id": release_id, "selected": selected},
-        )
-        return self.list_artist_preferences()
+        self._log_artist_preference_saved(artist_id, release_id, selected)
+        return table
+
+    async def add_or_update_artist_preference_async(
+        self,
+        *,
+        artist_id: str,
+        release_id: str,
+        selected: bool,
+    ) -> ArtistPreferenceTable:
+        def operation(session: Session) -> ArtistPreferenceTable:
+            return self._add_or_update_artist_preference(
+                session,
+                artist_id=artist_id,
+                release_id=release_id,
+                selected=selected,
+            )
+
+        table = await self._run_session(operation)
+        self._log_artist_preference_saved(artist_id, release_id, selected)
+        return table
 
     def remove_artist_preference(
         self,
@@ -154,23 +172,30 @@ class SettingsUiService:
         artist_id: str,
         release_id: str,
     ) -> ArtistPreferenceTable:
-        current = self._load_artist_preferences()
-        payload_entries = [
-            ArtistPreferenceEntry(
-                artist_id=row.artist_id,
-                release_id=row.release_id,
-                selected=row.selected,
-            )
-            for row in current
-            if not (row.artist_id == artist_id and row.release_id == release_id)
-        ]
-        payload = ArtistPreferencesPayload(preferences=payload_entries)
-        persist_artist_preferences(payload=payload, session=self._session)
-        logger.info(
-            "settings.ui.artist_preferences.remove",
-            extra={"artist_id": artist_id, "release_id": release_id},
+        table = self._remove_artist_preference(
+            self._session,
+            artist_id=artist_id,
+            release_id=release_id,
         )
-        return self.list_artist_preferences()
+        self._log_artist_preference_removed(artist_id, release_id)
+        return table
+
+    async def remove_artist_preference_async(
+        self,
+        *,
+        artist_id: str,
+        release_id: str,
+    ) -> ArtistPreferenceTable:
+        def operation(session: Session) -> ArtistPreferenceTable:
+            return self._remove_artist_preference(
+                session,
+                artist_id=artist_id,
+                release_id=release_id,
+            )
+
+        table = await self._run_session(operation)
+        self._log_artist_preference_removed(artist_id, release_id)
+        return table
 
     def _build_overview(self, response: SettingsResponse) -> SettingsOverview:
         rows = []
@@ -187,15 +212,141 @@ class SettingsUiService:
             )
         return SettingsOverview(rows=tuple(rows), updated_at=response.updated_at)
 
-    def _load_artist_preferences(self) -> Sequence[ArtistPreferenceRow]:
-        table = self.list_artist_preferences()
+    def _list_settings(self, session: Session) -> SettingsOverview:
+        response = fetch_settings(session=session)
+        return self._build_overview(response)
+
+    def _save_setting(
+        self,
+        session: Session,
+        *,
+        key: str,
+        value: str | None,
+    ) -> SettingsOverview:
+        payload = SettingsPayload(key=key, value=value)
+        response = persist_setting(payload=payload, session=session)
+        return self._build_overview(response)
+
+    def _list_history(self, session: Session) -> SettingsHistoryTable:
+        history = fetch_history(session=session)
+        rows = tuple(
+            SettingsHistoryRow(
+                key=entry.key,
+                old_value=entry.old_value,
+                new_value=entry.new_value,
+                changed_at=entry.changed_at,
+            )
+            for entry in history.history
+        )
+        return SettingsHistoryTable(rows=rows)
+
+    def _list_artist_preferences(self, session: Session) -> ArtistPreferenceTable:
+        preferences = fetch_artist_preferences(session=session)
+        rows = tuple(
+            ArtistPreferenceRow(
+                artist_id=entry.artist_id,
+                release_id=entry.release_id,
+                selected=entry.selected,
+            )
+            for entry in preferences.preferences
+        )
+        return ArtistPreferenceTable(rows=rows)
+
+    def _load_artist_preferences(self, session: Session) -> Sequence[ArtistPreferenceRow]:
+        table = self._list_artist_preferences(session)
         return table.rows
+
+    def _add_or_update_artist_preference(
+        self,
+        session: Session,
+        *,
+        artist_id: str,
+        release_id: str,
+        selected: bool,
+    ) -> ArtistPreferenceTable:
+        current = self._load_artist_preferences(session)
+        key = (artist_id, release_id)
+        entries: dict[tuple[str, str], ArtistPreferenceEntry] = {
+            (row.artist_id, row.release_id): ArtistPreferenceEntry(
+                artist_id=row.artist_id,
+                release_id=row.release_id,
+                selected=row.selected,
+            )
+            for row in current
+        }
+        entries[key] = ArtistPreferenceEntry(
+            artist_id=artist_id,
+            release_id=release_id,
+            selected=selected,
+        )
+        payload = ArtistPreferencesPayload(preferences=list(entries.values()))
+        persist_artist_preferences(payload=payload, session=session)
+        return self._list_artist_preferences(session)
+
+    def _remove_artist_preference(
+        self,
+        session: Session,
+        *,
+        artist_id: str,
+        release_id: str,
+    ) -> ArtistPreferenceTable:
+        current = self._load_artist_preferences(session)
+        payload_entries = [
+            ArtistPreferenceEntry(
+                artist_id=row.artist_id,
+                release_id=row.release_id,
+                selected=row.selected,
+            )
+            for row in current
+            if not (row.artist_id == artist_id and row.release_id == release_id)
+        ]
+        payload = ArtistPreferencesPayload(preferences=payload_entries)
+        persist_artist_preferences(payload=payload, session=session)
+        return self._list_artist_preferences(session)
+
+    def _log_settings_overview(self, overview: SettingsOverview) -> None:
+        logger.debug(
+            "settings.ui.list",
+            extra={"count": len(overview.rows)},
+        )
+
+    def _log_setting_saved(self, key: str, value: str | None) -> None:
+        logger.info(
+            "settings.ui.save",
+            extra={"key": key, "has_value": value is not None},
+        )
+
+    def _log_history(self, table: SettingsHistoryTable) -> None:
+        logger.debug("settings.ui.history", extra={"count": len(table.rows)})
+
+    def _log_artist_preferences(self, table: ArtistPreferenceTable) -> None:
+        logger.debug(
+            "settings.ui.artist_preferences",
+            extra={"count": len(table.rows)},
+        )
+
+    def _log_artist_preference_saved(self, artist_id: str, release_id: str, selected: bool) -> None:
+        logger.info(
+            "settings.ui.artist_preferences.save",
+            extra={
+                "artist_id": artist_id,
+                "release_id": release_id,
+                "selected": selected,
+            },
+        )
+
+    def _log_artist_preference_removed(self, artist_id: str, release_id: str) -> None:
+        logger.info(
+            "settings.ui.artist_preferences.remove",
+            extra={"artist_id": artist_id, "release_id": release_id},
+        )
 
 
 def get_settings_ui_service(
     session: Session = Depends(get_db),
+    session_runner: SessionRunner[Any] = Depends(get_session_runner),
 ) -> SettingsUiService:
-    return SettingsUiService(session=session)
+    return SettingsUiService(session=session, session_runner=session_runner)
 
 
 __all__ = [

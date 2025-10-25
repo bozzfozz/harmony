@@ -59,6 +59,9 @@ class _StubSettingsService:
     def list_settings(self) -> SettingsOverview:  # noqa: D401 - test stub
         return self.overview
 
+    async def list_settings_async(self) -> SettingsOverview:
+        return self.list_settings()
+
     def save_setting(self, *, key: str, value: str | None) -> SettingsOverview:
         self.saved_settings.append((key, value))
         updated = SettingsOverview(
@@ -68,11 +71,20 @@ class _StubSettingsService:
         self.overview = updated
         return self.overview
 
+    async def save_setting_async(self, *, key: str, value: str | None) -> SettingsOverview:
+        return self.save_setting(key=key, value=value)
+
     def list_history(self):  # noqa: D401 - test stub
         return SimpleNamespace(rows=self.history_rows)
 
+    async def list_history_async(self):  # noqa: D401 - test stub
+        return self.list_history()
+
     def list_artist_preferences(self):  # noqa: D401 - test stub
         return SimpleNamespace(rows=self.preferences_rows)
+
+    async def list_artist_preferences_async(self):  # noqa: D401 - test stub
+        return self.list_artist_preferences()
 
     def add_or_update_artist_preference(
         self,
@@ -87,10 +99,31 @@ class _StubSettingsService:
         )
         return SimpleNamespace(rows=self.preferences_rows)
 
+    async def add_or_update_artist_preference_async(
+        self,
+        *,
+        artist_id: str,
+        release_id: str,
+        selected: bool,
+    ):
+        return self.add_or_update_artist_preference(
+            artist_id=artist_id,
+            release_id=release_id,
+            selected=selected,
+        )
+
     def remove_artist_preference(self, *, artist_id: str, release_id: str):
         self.preference_calls.append(("remove", artist_id, release_id))
         self.preferences_rows = tuple()
         return SimpleNamespace(rows=self.preferences_rows)
+
+    async def remove_artist_preference_async(
+        self,
+        *,
+        artist_id: str,
+        release_id: str,
+    ):
+        return self.remove_artist_preference(artist_id=artist_id, release_id=release_id)
 
 
 @pytest.mark.parametrize(
