@@ -17,13 +17,13 @@ from app.ui.context.operations import (
 from app.ui.csrf import attach_csrf_cookie
 from app.ui.routes.shared import (
     _LIVE_UPDATES_SSE,
-    _LiveFragmentBuilder,
     _ensure_csrf_token,
+    _LiveFragmentBuilder,
     _resolve_live_updates_mode,
     _ui_event_stream,
+    get_csrf_manager,
     logger,
     templates,
-    get_csrf_manager,
 )
 from app.ui.services import (
     ActivityUiService,

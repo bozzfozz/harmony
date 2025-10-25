@@ -5,6 +5,7 @@ from typing import TypeVar
 from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from sqlalchemy.orm import Session
 
 from app.config import AppConfig
 from app.core.soulseek_client import SoulseekClient
@@ -59,7 +60,6 @@ from app.ui.services import (
     get_soulseek_ui_service,
 )
 from app.ui.session import UiSession, require_admin_with_feature, require_operator_with_feature
-from sqlalchemy.orm import Session
 
 T = TypeVar("T")
 
@@ -70,6 +70,7 @@ class DownloadLookupError(Exception):
     def __init__(self, download_id: int) -> None:
         super().__init__(f"Download {download_id} not found")
         self.download_id = download_id
+
 
 router = APIRouter()
 
@@ -877,9 +878,7 @@ async def soulseek_download_metadata_modal(
             "isrc": metadata_response.isrc,
             "copyright": metadata_response.copyright,
         }
-        filename = metadata_response.filename or (
-            download.filename or f"Download {download_id}"
-        )
+        filename = metadata_response.filename or (download.filename or f"Download {download_id}")
 
         context = build_soulseek_download_metadata_modal_context(
             request,

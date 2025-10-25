@@ -2144,7 +2144,9 @@ def test_soulseek_downloads_fragment_all_scope(monkeypatch) -> None:
 def test_soulseek_discography_jobs_fragment_success(monkeypatch) -> None:
     jobs = [_make_discography_job(7, artist_name="Artist Seven", artist_id="soulseek:artist-7")]
 
-    async def _fake_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
+    async def _fake_load(
+        limit: int = 25,
+    ) -> list[Any]:  # pragma: no cover - signature compatibility
         return jobs
 
     monkeypatch.setattr("app.ui.routes.soulseek._load_discography_jobs", _fake_load)
@@ -2166,7 +2168,9 @@ def test_soulseek_discography_jobs_fragment_success(monkeypatch) -> None:
 
 
 def test_soulseek_discography_jobs_fragment_failure(monkeypatch) -> None:
-    async def _raise_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
+    async def _raise_load(
+        limit: int = 25,
+    ) -> list[Any]:  # pragma: no cover - signature compatibility
         raise RuntimeError("database offline")
 
     monkeypatch.setattr("app.ui.routes.soulseek._load_discography_jobs", _raise_load)
@@ -2219,7 +2223,9 @@ def test_soulseek_discography_job_modal_feature_disabled(monkeypatch) -> None:
 def test_soulseek_discography_jobs_submit_success(monkeypatch) -> None:
     jobs = [_make_discography_job(11, artist_name="Artist Eleven", artist_id="soulseek:artist-11")]
 
-    async def _fake_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
+    async def _fake_load(
+        limit: int = 25,
+    ) -> list[Any]:  # pragma: no cover - signature compatibility
         return jobs
 
     monkeypatch.setattr("app.ui.routes.soulseek._load_discography_jobs", _fake_load)

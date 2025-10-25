@@ -52,9 +52,7 @@ class UiSessionStore:
         self._session_factory = session_factory or session_scope
 
     def create_session(self, session: StoredUiSession) -> None:
-        self._call_with_session(
-            lambda db_session: self._merge_session_record(db_session, session)
-        )
+        self._call_with_session(lambda db_session: self._merge_session_record(db_session, session))
 
     async def create_session_async(self, session: StoredUiSession) -> None:
         await self._call_with_session_async(
@@ -62,9 +60,7 @@ class UiSessionStore:
         )
 
     def get_session(self, identifier: str) -> StoredUiSession | None:
-        return self._call_with_session(
-            lambda db_session: self._get_session(db_session, identifier)
-        )
+        return self._call_with_session(lambda db_session: self._get_session(db_session, identifier))
 
     async def get_session_async(self, identifier: str) -> StoredUiSession | None:
         return await self._call_with_session_async(
@@ -120,9 +116,7 @@ class UiSessionStore:
             )
         )
 
-    async def set_spotify_backfill_job_id_async(
-        self, identifier: str, job_id: str | None
-    ) -> bool:
+    async def set_spotify_backfill_job_id_async(self, identifier: str, job_id: str | None) -> bool:
         return await self._call_with_session_async(
             lambda db_session: self._update_job_fields(
                 db_session,
@@ -168,9 +162,7 @@ class UiSessionStore:
     async def _call_with_session_async(self, func: Callable[[Session], T]) -> T:
         return await run_session(func, factory=self._session_factory)
 
-    def _merge_session_record(
-        self, db_session: Session, session: StoredUiSession
-    ) -> None:
+    def _merge_session_record(self, db_session: Session, session: StoredUiSession) -> None:
         record = UiSessionRecord(
             identifier=session.identifier,
             role=session.role,
@@ -186,17 +178,13 @@ class UiSessionStore:
         )
         db_session.merge(record)
 
-    def _get_session(
-        self, db_session: Session, identifier: str
-    ) -> StoredUiSession | None:
+    def _get_session(self, db_session: Session, identifier: str) -> StoredUiSession | None:
         record = db_session.get(UiSessionRecord, identifier)
         if record is None:
             return None
         return self._record_to_stored(record)
 
-    def _delete_session(
-        self, db_session: Session, identifier: str
-    ) -> StoredUiSession | None:
+    def _delete_session(self, db_session: Session, identifier: str) -> StoredUiSession | None:
         record = db_session.get(UiSessionRecord, identifier)
         if record is None:
             return None
@@ -204,9 +192,7 @@ class UiSessionStore:
         db_session.delete(record)
         return stored
 
-    def _update_last_seen(
-        self, db_session: Session, identifier: str, timestamp: datetime
-    ) -> bool:
+    def _update_last_seen(self, db_session: Session, identifier: str, timestamp: datetime) -> bool:
         record = db_session.get(UiSessionRecord, identifier)
         if record is None:
             return False
