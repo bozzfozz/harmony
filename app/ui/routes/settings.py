@@ -19,7 +19,12 @@ from app.ui.routes.shared import (
     logger,
     templates,
 )
-from app.ui.services import SettingsOverview, SettingsUiService, get_settings_ui_service
+from app.ui.services import (
+    ArtistPreferenceTable,
+    SettingsOverview,
+    SettingsUiService,
+    get_settings_ui_service,
+)
 from app.ui.session import UiSession, require_role
 
 router = APIRouter()
@@ -35,7 +40,7 @@ async def settings_page(
     csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
 
     try:
-        overview = service.list_settings()
+        overview = await service.list_settings_async()
     except Exception:
         logger.exception("ui.page.settings")
         overview = SettingsOverview(rows=(), updated_at=datetime.utcnow())
@@ -91,7 +96,7 @@ async def settings_history_fragment(
     service: SettingsUiService = Depends(get_settings_ui_service),
 ) -> Response:
     try:
-        history = service.list_history()
+        history = await service.list_history_async()
     except Exception:
         logger.exception("ui.fragment.settings.history")
         return _render_alert_fragment(
@@ -131,7 +136,7 @@ async def settings_artist_preferences_fragment(
     service: SettingsUiService = Depends(get_settings_ui_service),
 ) -> Response:
     try:
-        table = service.list_artist_preferences()
+        table = await service.list_artist_preferences_async()
     except Exception:
         logger.exception("ui.fragment.settings.artist_preferences")
         return _render_alert_fragment(
@@ -186,7 +191,7 @@ async def settings_save(
         value = None
 
     try:
-        overview = service.save_setting(key=key, value=value)
+        overview = await service.save_setting_async(key=key, value=value)
     except HTTPException as exc:
         return _render_alert_fragment(
             request,
@@ -245,8 +250,8 @@ async def settings_artist_preferences_save(
         selected_raw = values.get("selected", "")
         selected = selected_raw.lower() in {"on", "true", "1", "yes"}
 
-        def handler():
-            return service.add_or_update_artist_preference(
+        async def handler() -> ArtistPreferenceTable:
+            return await service.add_or_update_artist_preference_async(
                 artist_id=artist_id,
                 release_id=release_id,
                 selected=selected,
@@ -262,8 +267,8 @@ async def settings_artist_preferences_save(
         selected_raw = values.get("selected", "false")
         selected = selected_raw.lower() in {"true", "1", "yes", "on"}
 
-        def handler():
-            return service.add_or_update_artist_preference(
+        async def handler() -> ArtistPreferenceTable:
+            return await service.add_or_update_artist_preference_async(
                 artist_id=artist_id,
                 release_id=release_id,
                 selected=selected,
@@ -277,8 +282,8 @@ async def settings_artist_preferences_save(
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
-        def handler():
-            return service.remove_artist_preference(
+        async def handler() -> ArtistPreferenceTable:
+            return await service.remove_artist_preference_async(
                 artist_id=artist_id,
                 release_id=release_id,
             )
@@ -291,7 +296,7 @@ async def settings_artist_preferences_save(
         )
 
     try:
-        table = handler()
+        table = await handler()
     except HTTPException as exc:
         return _render_alert_fragment(
             request,
