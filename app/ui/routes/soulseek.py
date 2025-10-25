@@ -388,7 +388,7 @@ async def soulseek_downloads_fragment(
     service: DownloadsUiService = Depends(get_downloads_ui_service),
 ) -> Response:
     try:
-        page = service.list_downloads(
+        page = await service.list_downloads_async(
             limit=limit,
             offset=offset,
             include_all=include_all,
@@ -1148,7 +1148,7 @@ async def soulseek_download_requeue(
                 request=request,
                 session=db_session,
             )
-        page = service.list_downloads(
+        page = await service.list_downloads_async(
             limit=limit_value,
             offset=offset_value,
             include_all=include_all,
@@ -1286,7 +1286,7 @@ async def soulseek_download_cancel(
                 session=db_session,
                 client=client,
             )
-        page = service.list_downloads(
+        page = await service.list_downloads_async(
             limit=limit_value,
             offset=offset_value,
             include_all=include_all,
@@ -1395,7 +1395,7 @@ async def soulseek_download_lyrics_refresh(
                 session=db_session,
                 config=config,
             )
-        page = service.list_downloads(
+        page = await service.list_downloads_async(
             limit=limit_value,
             offset=offset_value,
             include_all=include_all,
@@ -1504,7 +1504,7 @@ async def soulseek_download_metadata_refresh(
                 session=db_session,
                 config=config,
             )
-        page = service.list_downloads(
+        page = await service.list_downloads_async(
             limit=limit_value,
             offset=offset_value,
             include_all=include_all,
@@ -1613,7 +1613,7 @@ async def soulseek_download_artwork_refresh(
                 session=db_session,
                 config=config,
             )
-        page = service.list_downloads(
+        page = await service.list_downloads_async(
             limit=limit_value,
             offset=offset_value,
             include_all=include_all,
@@ -1740,7 +1740,7 @@ async def soulseek_downloads_cleanup(
 
     try:
         await soulseek_remove_completed_downloads(client=client)
-        page = service.list_downloads(
+        page = await service.list_downloads_async(
             limit=limit_value,
             offset=offset_value,
             include_all=include_all,
