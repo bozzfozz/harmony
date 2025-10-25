@@ -200,6 +200,7 @@ class SecretValidationCard:
     form: FormDefinition
     target_id: str
     result: SecretValidationResultView | None = None
+    can_validate: bool = False
 
 
 @dataclass(slots=True)
