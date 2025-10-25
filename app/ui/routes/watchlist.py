@@ -59,7 +59,14 @@ async def watchlist_table(
     session: UiSession = Depends(require_role("operator")),
     service: WatchlistUiService = Depends(get_watchlist_ui_service),
 ) -> Response:
-    csrf_token = request.cookies.get("csrftoken", "")
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+
+    def _finalize(response: Response) -> Response:
+        if issued:
+            attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+        return response
+
     limit = request.query_params.get("limit")
     offset = request.query_params.get("offset")
     try:
@@ -73,9 +80,11 @@ async def watchlist_table(
             status="error",
             role=session.role,
         )
-        return _render_alert_fragment(
-            request,
-            "Unable to load watchlist entries.",
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                "Unable to load watchlist entries.",
+            )
         )
 
     context = build_watchlist_fragment_context(
@@ -93,11 +102,12 @@ async def watchlist_table(
         role=session.role,
         count=len(context["fragment"].table.rows),
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/watchlist_table.j2",
         context,
     )
+    return _finalize(response)
 
 
 @router.post(
@@ -112,6 +122,14 @@ async def watchlist_priority_update(
     session: UiSession = Depends(require_role("operator")),
     service: WatchlistUiService = Depends(get_watchlist_ui_service),
 ) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+
+    def _finalize(response: Response) -> Response:
+        if issued:
+            attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+        return response
+
     values = _parse_form_body(await request.body())
     priority_raw = values.get("priority", "")
     limit = values.get("limit")
@@ -120,10 +138,12 @@ async def watchlist_priority_update(
     try:
         payload = WatchlistPriorityUpdate.model_validate({"priority": priority_raw})
     except ValidationError:
-        return _render_alert_fragment(
-            request,
-            "Please provide a valid priority value.",
-            status_code=status.HTTP_400_BAD_REQUEST,
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                "Please provide a valid priority value.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
         )
 
     try:
@@ -141,10 +161,12 @@ async def watchlist_priority_update(
             role=session.role,
             error=exc.code,
         )
-        return _render_alert_fragment(
-            request,
-            exc.message,
-            status_code=exc.http_status,
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                exc.message,
+                status_code=exc.http_status,
+            )
         )
     except Exception:
         logger.exception("ui.fragment.watchlist.priority")
@@ -156,15 +178,17 @@ async def watchlist_priority_update(
             role=session.role,
             error="unexpected",
         )
-        return _render_alert_fragment(
-            request,
-            "Failed to update the watchlist entry.",
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                "Failed to update the watchlist entry.",
+            )
         )
 
     context = build_watchlist_fragment_context(
         request,
         entries=table.entries,
-        csrf_token=request.cookies.get("csrftoken", ""),
+        csrf_token=csrf_token,
         limit=limit,
         offset=offset,
     )
@@ -176,11 +200,12 @@ async def watchlist_priority_update(
         role=session.role,
         count=len(context["fragment"].table.rows),
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/watchlist_table.j2",
         context,
     )
+    return _finalize(response)
 
 
 @router.post(
@@ -195,6 +220,14 @@ async def watchlist_pause(
     session: UiSession = Depends(require_role("operator")),
     service: WatchlistUiService = Depends(get_watchlist_ui_service),
 ) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+
+    def _finalize(response: Response) -> Response:
+        if issued:
+            attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+        return response
+
     values = _parse_form_body(await request.body())
     limit = values.get("limit")
     offset = values.get("offset")
@@ -206,10 +239,12 @@ async def watchlist_pause(
     try:
         pause_payload = WatchlistPauseRequest.model_validate(pause_payload_raw)
     except ValidationError:
-        return _render_alert_fragment(
-            request,
-            "Please provide a valid resume date and time.",
-            status_code=status.HTTP_400_BAD_REQUEST,
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                "Please provide a valid resume date and time.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
         )
 
     try:
@@ -229,10 +264,12 @@ async def watchlist_pause(
             error=exc.code,
             action="pause",
         )
-        return _render_alert_fragment(
-            request,
-            exc.message,
-            status_code=exc.http_status,
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                exc.message,
+                status_code=exc.http_status,
+            )
         )
     except Exception:
         logger.exception("ui.fragment.watchlist.pause")
@@ -245,15 +282,17 @@ async def watchlist_pause(
             error="unexpected",
             action="pause",
         )
-        return _render_alert_fragment(
-            request,
-            "Failed to pause the watchlist entry.",
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                "Failed to pause the watchlist entry.",
+            )
         )
 
     context = build_watchlist_fragment_context(
         request,
         entries=table.entries,
-        csrf_token=request.cookies.get("csrftoken", ""),
+        csrf_token=csrf_token,
         limit=limit,
         offset=offset,
     )
@@ -266,11 +305,12 @@ async def watchlist_pause(
         count=len(context["fragment"].table.rows),
         action="pause",
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/watchlist_table.j2",
         context,
     )
+    return _finalize(response)
 
 
 @router.post(
@@ -285,6 +325,14 @@ async def watchlist_resume(
     session: UiSession = Depends(require_role("operator")),
     service: WatchlistUiService = Depends(get_watchlist_ui_service),
 ) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+
+    def _finalize(response: Response) -> Response:
+        if issued:
+            attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+        return response
+
     values = _parse_form_body(await request.body())
     limit = values.get("limit")
     offset = values.get("offset")
@@ -301,10 +349,12 @@ async def watchlist_resume(
             error=exc.code,
             action="resume",
         )
-        return _render_alert_fragment(
-            request,
-            exc.message,
-            status_code=exc.http_status,
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                exc.message,
+                status_code=exc.http_status,
+            )
         )
     except Exception:
         logger.exception("ui.fragment.watchlist.resume")
@@ -317,15 +367,17 @@ async def watchlist_resume(
             error="unexpected",
             action="resume",
         )
-        return _render_alert_fragment(
-            request,
-            "Failed to resume the watchlist entry.",
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                "Failed to resume the watchlist entry.",
+            )
         )
 
     context = build_watchlist_fragment_context(
         request,
         entries=table.entries,
-        csrf_token=request.cookies.get("csrftoken", ""),
+        csrf_token=csrf_token,
         limit=limit,
         offset=offset,
     )
@@ -338,11 +390,12 @@ async def watchlist_resume(
         count=len(context["fragment"].table.rows),
         action="resume",
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/watchlist_table.j2",
         context,
     )
+    return _finalize(response)
 
 
 @router.post(
@@ -357,6 +410,14 @@ async def watchlist_delete(
     session: UiSession = Depends(require_role("operator")),
     service: WatchlistUiService = Depends(get_watchlist_ui_service),
 ) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+
+    def _finalize(response: Response) -> Response:
+        if issued:
+            attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+        return response
+
     values = _parse_form_body(await request.body())
     limit = values.get("limit")
     offset = values.get("offset")
@@ -373,10 +434,12 @@ async def watchlist_delete(
             error=exc.code,
             action="delete",
         )
-        return _render_alert_fragment(
-            request,
-            exc.message,
-            status_code=exc.http_status,
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                exc.message,
+                status_code=exc.http_status,
+            )
         )
     except Exception:
         logger.exception("ui.fragment.watchlist.delete")
@@ -389,15 +452,17 @@ async def watchlist_delete(
             error="unexpected",
             action="delete",
         )
-        return _render_alert_fragment(
-            request,
-            "Failed to remove the watchlist entry.",
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                "Failed to remove the watchlist entry.",
+            )
         )
 
     context = build_watchlist_fragment_context(
         request,
         entries=table.entries,
-        csrf_token=request.cookies.get("csrftoken", ""),
+        csrf_token=csrf_token,
         limit=limit,
         offset=offset,
     )
@@ -410,11 +475,12 @@ async def watchlist_delete(
         count=len(context["fragment"].table.rows),
         action="delete",
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/watchlist_table.j2",
         context,
     )
+    return _finalize(response)
 
 
 @router.post(
@@ -427,6 +493,14 @@ async def watchlist_create(
     session: UiSession = Depends(require_role("operator")),
     service: WatchlistUiService = Depends(get_watchlist_ui_service),
 ) -> Response:
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
+
+    def _finalize(response: Response) -> Response:
+        if issued:
+            attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+        return response
+
     values = _parse_form_body(await request.body())
     payload_data = {
         "artist_key": values.get("artist_key", ""),
@@ -435,10 +509,12 @@ async def watchlist_create(
     try:
         payload = WatchlistEntryCreate.model_validate(payload_data)
     except ValidationError:
-        return _render_alert_fragment(
-            request,
-            "Please provide a valid artist identifier.",
-            status_code=status.HTTP_400_BAD_REQUEST,
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                "Please provide a valid artist identifier.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
         )
 
     pause_payload_raw = {
@@ -449,10 +525,12 @@ async def watchlist_create(
     try:
         pause_payload = WatchlistPauseRequest.model_validate(pause_payload_raw)
     except ValidationError:
-        return _render_alert_fragment(
-            request,
-            "Please provide a valid resume date and time.",
-            status_code=status.HTTP_400_BAD_REQUEST,
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                "Please provide a valid resume date and time.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
         )
 
     try:
@@ -472,10 +550,12 @@ async def watchlist_create(
             role=session.role,
             error=exc.code,
         )
-        return _render_alert_fragment(
-            request,
-            exc.message,
-            status_code=exc.http_status,
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                exc.message,
+                status_code=exc.http_status,
+            )
         )
     except Exception:
         logger.exception("ui.fragment.watchlist.create")
@@ -487,15 +567,17 @@ async def watchlist_create(
             role=session.role,
             error="unexpected",
         )
-        return _render_alert_fragment(
-            request,
-            "Failed to add the artist to the watchlist.",
+        return _finalize(
+            _render_alert_fragment(
+                request,
+                "Failed to add the artist to the watchlist.",
+            )
         )
 
     context = build_watchlist_fragment_context(
         request,
         entries=table.entries,
-        csrf_token=request.cookies.get("csrftoken", ""),
+        csrf_token=csrf_token,
         limit=None,
         offset=None,
     )
@@ -507,11 +589,12 @@ async def watchlist_create(
         role=session.role,
         count=len(context["fragment"].table.rows),
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/watchlist_table.j2",
         context,
     )
+    return _finalize(response)
 
 
 __all__ = ["router"]
