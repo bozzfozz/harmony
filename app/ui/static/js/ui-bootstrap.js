@@ -717,6 +717,267 @@
 
   var eventSource;
 
+  var POLL_INTERVALS_BY_EVENT = {
+    downloads: 15,
+    jobs: 15,
+    watchlist: 30,
+    activity: 60,
+  };
+
+  var liveFragmentMeta = Object.create(null);
+  var pollingFallbacks = Object.create(null);
+
+  var toPlainObject = function (dataset) {
+    if (!dataset) {
+      return {};
+    }
+    var result = {};
+    Object.keys(dataset).forEach(function (key) {
+      result[key] = dataset[key];
+    });
+    return result;
+  };
+
+  var registerLiveFragment = function (element) {
+    if (!element || !element.id) {
+      return;
+    }
+    var meta = {
+      id: element.id,
+      hxGet: element.getAttribute('hx-get') || null,
+      hxTarget: element.getAttribute('hx-target') || null,
+      hxSwap: element.getAttribute('hx-swap') || null,
+      hxTrigger: element.getAttribute('hx-trigger') || null,
+      hxOn: element.getAttribute('hx-on') || null,
+      classList: element.className ? element.className.split(/\s+/) : [],
+      role: element.getAttribute('role') || null,
+      ariaLive: element.getAttribute('aria-live') || null,
+      ariaLabelledby: element.getAttribute('aria-labelledby') || null,
+      dataFragment: element.getAttribute('data-fragment') || null,
+      eventName:
+        element.dataset && element.dataset.liveEvent
+          ? element.dataset.liveEvent
+          : null,
+    };
+    liveFragmentMeta[element.id] = meta;
+    if (pollingFallbacks[element.id]) {
+      var fallback = pollingFallbacks[element.id];
+      fallback.hxGet = meta.hxGet;
+      fallback.hxTarget = meta.hxTarget;
+      fallback.hxSwap = meta.hxSwap || fallback.hxSwap;
+      fallback.hxOn = meta.hxOn;
+      fallback.hxTrigger = meta.hxTrigger || fallback.hxTrigger;
+      fallback.classList = meta.classList;
+      fallback.role = meta.role;
+      fallback.ariaLive = meta.ariaLive;
+      fallback.ariaLabelledby = meta.ariaLabelledby;
+      fallback.dataFragment = meta.dataFragment;
+      if (meta.eventName) {
+        fallback.eventName = meta.eventName;
+      }
+    }
+  };
+
+  var registerExistingLiveFragments = function () {
+    var nodes = document.querySelectorAll('[data-live-event]');
+    for (var i = 0; i < nodes.length; i += 1) {
+      registerLiveFragment(nodes[i]);
+    }
+  };
+
+  var normalizeTriggerParts = function (trigger) {
+    if (!trigger) {
+      return [];
+    }
+    return trigger
+      .split(',')
+      .map(function (part) {
+        return part.trim();
+      })
+      .filter(function (part) {
+        return part.length > 0;
+      });
+  };
+
+  var applyPollingAttributes = function (element, fallback) {
+    if (!element || !fallback) {
+      return;
+    }
+    if (fallback.role) {
+      element.setAttribute('role', fallback.role);
+    }
+    if (fallback.ariaLive) {
+      element.setAttribute('aria-live', fallback.ariaLive);
+    }
+    if (fallback.ariaLabelledby) {
+      element.setAttribute('aria-labelledby', fallback.ariaLabelledby);
+    }
+    if (fallback.dataFragment) {
+      element.setAttribute('data-fragment', fallback.dataFragment);
+    }
+    if (fallback.classList && fallback.classList.length) {
+      for (var i = 0; i < fallback.classList.length; i += 1) {
+        var cls = fallback.classList[i];
+        if (cls) {
+          element.classList.add(cls);
+        }
+      }
+    }
+    if (fallback.hxGet) {
+      element.setAttribute('hx-get', fallback.hxGet);
+    }
+    if (fallback.hxTarget) {
+      element.setAttribute('hx-target', fallback.hxTarget);
+    }
+    if (fallback.hxSwap) {
+      element.setAttribute('hx-swap', fallback.hxSwap);
+    }
+    if (fallback.hxOn) {
+      element.setAttribute('hx-on', fallback.hxOn);
+    }
+    var triggerParts = normalizeTriggerParts(fallback.hxTrigger);
+    var pollPart = 'every ' + fallback.interval + 's';
+    var replaced = false;
+    for (var j = 0; j < triggerParts.length; j += 1) {
+      if (triggerParts[j].indexOf('every ') === 0) {
+        triggerParts[j] = pollPart;
+        replaced = true;
+        break;
+      }
+    }
+    if (!replaced) {
+      if (!triggerParts.length) {
+        triggerParts.push('load');
+      }
+      triggerParts.push(pollPart);
+    }
+    element.setAttribute('hx-trigger', triggerParts.join(', '));
+    if (element.dataset) {
+      element.dataset.liveMode = 'polling';
+    }
+  };
+
+  var ensurePollingFallback = function (fragmentId, eventName) {
+    if (!fragmentId) {
+      return null;
+    }
+    if (pollingFallbacks[fragmentId]) {
+      return pollingFallbacks[fragmentId];
+    }
+    var meta = liveFragmentMeta[fragmentId];
+    if (!meta) {
+      return null;
+    }
+    var resolvedEvent = eventName || meta.eventName;
+    if (!resolvedEvent) {
+      return null;
+    }
+    var interval = POLL_INTERVALS_BY_EVENT[resolvedEvent];
+    if (!interval) {
+      return null;
+    }
+    var fallback = {
+      interval: interval,
+      eventName: resolvedEvent,
+      hxGet: meta.hxGet,
+      hxTarget: meta.hxTarget,
+      hxSwap: meta.hxSwap,
+      hxOn: meta.hxOn,
+      hxTrigger: meta.hxTrigger,
+      classList: meta.classList,
+      role: meta.role,
+      ariaLive: meta.ariaLive,
+      ariaLabelledby: meta.ariaLabelledby,
+      dataFragment: meta.dataFragment,
+    };
+    if (!fallback.hxTarget && fragmentId) {
+      fallback.hxTarget = '#' + fragmentId;
+    }
+    if (!fallback.hxSwap) {
+      fallback.hxSwap = 'outerHTML';
+    }
+    if (!fallback.hxTrigger) {
+      fallback.hxTrigger = 'load';
+    }
+    pollingFallbacks[fragmentId] = fallback;
+    return fallback;
+  };
+
+  var downgradeFragmentToPolling = function (
+    element,
+    fragmentId,
+    eventName,
+    expectedAttributes
+  ) {
+    if (!element || !fragmentId) {
+      return;
+    }
+    var fallback = ensurePollingFallback(fragmentId, eventName);
+    if (!fallback) {
+      console.warn(
+        'ui.events.fragment_downgrade_missing_meta',
+        fragmentId,
+        eventName
+      );
+      return;
+    }
+    applyPollingAttributes(element, fallback);
+    element.removeAttribute('data-live-event');
+    if (element.dataset && element.dataset.liveEvent) {
+      delete element.dataset.liveEvent;
+    }
+    console.warn('ui.events.fragment_downgraded', {
+      fragment: fragmentId,
+      event: fallback.eventName || eventName,
+      interval: fallback.interval,
+      expected: expectedAttributes,
+      actual: toPlainObject(element.dataset),
+    });
+    if (window.htmx && typeof window.htmx.trigger === 'function') {
+      window.htmx.trigger(element, 'load');
+    }
+  };
+
+  var handleHtmxAfterSwap = function (event) {
+    var detail = event.detail || {};
+    var candidates = [];
+    if (detail.target) {
+      candidates.push(detail.target);
+    }
+    if (detail.target && detail.target.querySelectorAll) {
+      var descendants = detail.target.querySelectorAll('[id]');
+      for (var i = 0; i < descendants.length; i += 1) {
+        candidates.push(descendants[i]);
+      }
+    }
+    for (var j = 0; j < candidates.length; j += 1) {
+      var node = candidates[j];
+      if (!node || !node.id) {
+        continue;
+      }
+      if (node.dataset && node.dataset.liveEvent) {
+        registerLiveFragment(node);
+      }
+      var fallback = pollingFallbacks[node.id];
+      if (fallback && (!node.dataset || node.dataset.liveMode !== 'polling')) {
+        applyPollingAttributes(node, fallback);
+      }
+    }
+  };
+
+  var initialiseLiveFragments = function () {
+    registerExistingLiveFragments();
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initialiseLiveFragments, {
+      once: true,
+    });
+  } else {
+    initialiseLiveFragments();
+  }
+  document.addEventListener('htmx:afterSwap', handleHtmxAfterSwap);
+
   var closeSource = function () {
     if (eventSource) {
       eventSource.close();
@@ -768,7 +1029,24 @@
       }
     }
 
+    if (element.dataset && element.dataset.liveMode === 'polling') {
+      return;
+    }
+
     if (!shouldApplyUpdate(element, payload.data_attributes)) {
+      console.warn('ui.events.fragment_mismatch', {
+        fragment: fragmentId,
+        event: eventName,
+        currentEvent: element.dataset ? element.dataset.liveEvent : null,
+        expected: payload.data_attributes || {},
+        actual: toPlainObject(element.dataset),
+      });
+      downgradeFragmentToPolling(
+        element,
+        fragmentId,
+        eventName || (element.dataset ? element.dataset.liveEvent : null),
+        payload.data_attributes || {}
+      );
       return;
     }
 
