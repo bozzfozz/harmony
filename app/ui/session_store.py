@@ -4,11 +4,12 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TypeVar
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, delete, func, select
 from sqlalchemy.orm import Session
 
-from app.db import Base, session_scope
+from app.db import Base, run_session, session_scope
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,7 @@ class UiSessionRecord(Base):
 
 
 SessionFactory = Callable[[], AbstractContextManager[Session]]
+T = TypeVar("T")
 
 
 class UiSessionStore:
@@ -50,6 +52,125 @@ class UiSessionStore:
         self._session_factory = session_factory or session_scope
 
     def create_session(self, session: StoredUiSession) -> None:
+        self._call_with_session(
+            lambda db_session: self._merge_session_record(db_session, session)
+        )
+
+    async def create_session_async(self, session: StoredUiSession) -> None:
+        await self._call_with_session_async(
+            lambda db_session: self._merge_session_record(db_session, session)
+        )
+
+    def get_session(self, identifier: str) -> StoredUiSession | None:
+        return self._call_with_session(
+            lambda db_session: self._get_session(db_session, identifier)
+        )
+
+    async def get_session_async(self, identifier: str) -> StoredUiSession | None:
+        return await self._call_with_session_async(
+            lambda db_session: self._get_session(db_session, identifier)
+        )
+
+    def delete_session(self, identifier: str) -> StoredUiSession | None:
+        return self._call_with_session(
+            lambda db_session: self._delete_session(db_session, identifier)
+        )
+
+    async def delete_session_async(self, identifier: str) -> StoredUiSession | None:
+        return await self._call_with_session_async(
+            lambda db_session: self._delete_session(db_session, identifier)
+        )
+
+    def update_last_seen(self, identifier: str, timestamp: datetime) -> bool:
+        return self._call_with_session(
+            lambda db_session: self._update_last_seen(db_session, identifier, timestamp)
+        )
+
+    async def update_last_seen_async(self, identifier: str, timestamp: datetime) -> bool:
+        return await self._call_with_session_async(
+            lambda db_session: self._update_last_seen(db_session, identifier, timestamp)
+        )
+
+    def set_spotify_free_ingest_job_id(self, identifier: str, job_id: str | None) -> bool:
+        return self._call_with_session(
+            lambda db_session: self._update_job_fields(
+                db_session,
+                identifier,
+                spotify_free_ingest_job_id=job_id,
+            )
+        )
+
+    async def set_spotify_free_ingest_job_id_async(
+        self, identifier: str, job_id: str | None
+    ) -> bool:
+        return await self._call_with_session_async(
+            lambda db_session: self._update_job_fields(
+                db_session,
+                identifier,
+                spotify_free_ingest_job_id=job_id,
+            )
+        )
+
+    def set_spotify_backfill_job_id(self, identifier: str, job_id: str | None) -> bool:
+        return self._call_with_session(
+            lambda db_session: self._update_job_fields(
+                db_session,
+                identifier,
+                spotify_backfill_job_id=job_id,
+            )
+        )
+
+    async def set_spotify_backfill_job_id_async(
+        self, identifier: str, job_id: str | None
+    ) -> bool:
+        return await self._call_with_session_async(
+            lambda db_session: self._update_job_fields(
+                db_session,
+                identifier,
+                spotify_backfill_job_id=job_id,
+            )
+        )
+
+    def clear_job_state(self, identifier: str) -> bool:
+        return self._call_with_session(
+            lambda db_session: self._update_job_fields(
+                db_session,
+                identifier,
+                spotify_free_ingest_job_id=None,
+                spotify_backfill_job_id=None,
+            )
+        )
+
+    async def clear_job_state_async(self, identifier: str) -> bool:
+        return await self._call_with_session_async(
+            lambda db_session: self._update_job_fields(
+                db_session,
+                identifier,
+                spotify_free_ingest_job_id=None,
+                spotify_backfill_job_id=None,
+            )
+        )
+
+    def _update_job_fields(
+        self, db_session: Session, identifier: str, **fields: str | None
+    ) -> bool:
+        record = db_session.get(UiSessionRecord, identifier)
+        if record is None:
+            return False
+        for key, value in fields.items():
+            setattr(record, key, value)
+        return True
+
+    def _call_with_session(self, func: Callable[[Session], T]) -> T:
+        with self._session_factory() as db_session:
+            return func(db_session)
+
+    async def _call_with_session_async(self, func: Callable[[Session], T]) -> T:
+        return await run_session(func, factory=self._session_factory)
+
+    def _merge_session_record(
+        self, db_session: Session, session: StoredUiSession
+    ) -> None:
         record = UiSessionRecord(
             identifier=session.identifier,
             role=session.role,
@@ -63,60 +184,34 @@ class UiSessionStore:
             spotify_free_ingest_job_id=session.spotify_free_ingest_job_id,
             spotify_backfill_job_id=session.spotify_backfill_job_id,
         )
-        with self._session_factory() as db_session:
-            db_session.merge(record)
+        db_session.merge(record)
 
-    def get_session(self, identifier: str) -> StoredUiSession | None:
-        with self._session_factory() as db_session:
-            record = db_session.get(UiSessionRecord, identifier)
-            if record is None:
-                return None
-            return self._record_to_stored(record)
+    def _get_session(
+        self, db_session: Session, identifier: str
+    ) -> StoredUiSession | None:
+        record = db_session.get(UiSessionRecord, identifier)
+        if record is None:
+            return None
+        return self._record_to_stored(record)
 
-    def delete_session(self, identifier: str) -> StoredUiSession | None:
-        with self._session_factory() as db_session:
-            record = db_session.get(UiSessionRecord, identifier)
-            if record is None:
-                return None
-            stored = self._record_to_stored(record)
-            db_session.delete(record)
-            return stored
+    def _delete_session(
+        self, db_session: Session, identifier: str
+    ) -> StoredUiSession | None:
+        record = db_session.get(UiSessionRecord, identifier)
+        if record is None:
+            return None
+        stored = self._record_to_stored(record)
+        db_session.delete(record)
+        return stored
 
-    def update_last_seen(self, identifier: str, timestamp: datetime) -> bool:
-        with self._session_factory() as db_session:
-            record = db_session.get(UiSessionRecord, identifier)
-            if record is None:
-                return False
-            record.last_seen_at = timestamp
-            return True
-
-    def set_spotify_free_ingest_job_id(self, identifier: str, job_id: str | None) -> bool:
-        return self._update_job_fields(
-            identifier,
-            spotify_free_ingest_job_id=job_id,
-        )
-
-    def set_spotify_backfill_job_id(self, identifier: str, job_id: str | None) -> bool:
-        return self._update_job_fields(
-            identifier,
-            spotify_backfill_job_id=job_id,
-        )
-
-    def clear_job_state(self, identifier: str) -> bool:
-        return self._update_job_fields(
-            identifier,
-            spotify_free_ingest_job_id=None,
-            spotify_backfill_job_id=None,
-        )
-
-    def _update_job_fields(self, identifier: str, **fields: str | None) -> bool:
-        with self._session_factory() as db_session:
-            record = db_session.get(UiSessionRecord, identifier)
-            if record is None:
-                return False
-            for key, value in fields.items():
-                setattr(record, key, value)
-            return True
+    def _update_last_seen(
+        self, db_session: Session, identifier: str, timestamp: datetime
+    ) -> bool:
+        record = db_session.get(UiSessionRecord, identifier)
+        if record is None:
+            return False
+        record.last_seen_at = timestamp
+        return True
 
     @staticmethod
     def _record_to_stored(record: UiSessionRecord) -> StoredUiSession:
