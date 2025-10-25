@@ -12,7 +12,7 @@ Harmony verlässt sich weiterhin auf nachvollziehbare lokale Gates. Ergänzend p
 | `make fmt`                | `scripts/dev/fmt.sh`                | Führt `ruff format` und Import-Sortierung (`ruff check --select I --fix`) aus. |
 | `make lint`               | `scripts/dev/lint_py.sh`            | Führt `ruff check --output-format=concise .` und `mypy app tests --config-file mypy.ini` aus. |
 | `make dep-sync`           | `scripts/dev/dep_sync_py.sh`        | Prüft Python-Abhängigkeiten auf fehlende oder ungenutzte Pakete. |
-| `make test`               | `scripts/dev/test_py.sh`            | Erstellt eine SQLite-Testdatenbank unter `.tmp/test.db` und startet `pytest -q`. |
+| `make test`               | `scripts/dev/test_py.sh`            | Erstellt eine SQLite-Testdatenbank unter `.tmp/test.db` und startet `pytest -q`. Benötigt Node.js ≥ 18 für den UI-Bootstrap-Test [`tests/ui/test_ui_bootstrap.py`](../../tests/ui/test_ui_bootstrap.py). |
 | `make be-verify`          | —                                   | Alias für `make test`; dient als explizites Backend-Gate im `make all`-Lauf. |
 | `make supply-guard`       | `scripts/dev/supply_guard.sh`       | Prüft auf versehentlich eingecheckte Node-Build-Artefakte. |
 | `make smoke`              | `scripts/dev/smoke_unified.sh`      | Startet `uvicorn app.main:app`, pingt bis zu 60 Sekunden `http://127.0.0.1:${APP_PORT}${SMOKE_PATH}` und beendet den Prozess kontrolliert; optional wird ein vorhandenes Unified-Docker-Image geprüft. |
