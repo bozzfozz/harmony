@@ -519,7 +519,8 @@ async def soulseek_discography_job_modal(
         submit_url = str(request.url_for("soulseek_discography_jobs_submit"))
     except Exception:
         submit_url = "/ui/soulseek/discography/jobs"
-    csrf_token = request.cookies.get("csrftoken", "")
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     target_id = "#hx-soulseek-discography-jobs"
     context = build_soulseek_discography_modal_context(
         request,
@@ -534,11 +535,14 @@ async def soulseek_discography_job_modal(
         status="success",
         role=session.role,
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/soulseek_discography_modal.j2",
         context,
     )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 @router.post(
@@ -557,7 +561,8 @@ async def soulseek_discography_jobs_submit(
     raw_name = values.get("artist_name")
     artist_name = raw_name.strip() if isinstance(raw_name, str) else ""
     form_values = {"artist_id": artist_id, "artist_name": artist_name}
-    csrf_token = request.cookies.get("csrftoken", "")
+    csrf_manager = get_csrf_manager(request)
+    csrf_token, issued = _ensure_csrf_token(request, session, csrf_manager)
     try:
         submit_url = str(request.url_for("soulseek_discography_jobs_submit"))
     except Exception:
@@ -580,6 +585,8 @@ async def soulseek_discography_jobs_submit(
         )
         response.headers["HX-Retarget"] = "#modal-root"
         response.headers["HX-Reswap"] = "innerHTML"
+        if issued:
+            attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
         return response
 
     payload = DiscographyDownloadRequest(
@@ -621,6 +628,8 @@ async def soulseek_discography_jobs_submit(
             role=session.role,
             error=str(exc.status_code),
         )
+        if issued:
+            attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
         return response
     except Exception:
         logger.exception(event_name)
@@ -640,6 +649,8 @@ async def soulseek_discography_jobs_submit(
         )
         response.headers["HX-Retarget"] = "#modal-root"
         response.headers["HX-Reswap"] = "innerHTML"
+        if issued:
+            attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
         return response
 
     artist_label = artist_name or artist_id
@@ -669,11 +680,14 @@ async def soulseek_discography_jobs_submit(
         job_id=job_response.job_id,
         job_status=job_response.status,
     )
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "partials/soulseek_discography_jobs.j2",
         context,
     )
+    if issued:
+        attach_csrf_cookie(response, session, csrf_manager, token=csrf_token)
+    return response
 
 
 @router.get(
