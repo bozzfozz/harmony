@@ -11,7 +11,8 @@ exposes the API on **port 8080** and stores all state in SQLite.
 > for the sitemap & fragment contracts, [`docs/operations/security.md`](docs/operations/security.md)
 > for session and role guidance, [`docs/ui/csp.md`](docs/ui/csp.md) for CSP controls, and
 > [`docs/ui/spotify.md`](docs/ui/spotify.md) plus [`docs/ui/soulseek.md`](docs/ui/soulseek.md)
-> for feature-specific flows. No Node.js toolchain is required.
+> for feature-specific flows. No Node.js build step is required, but install Node.js ≥ 18 to
+> run the bundled UI bootstrap tests (see [`tests/ui/test_ui_bootstrap.py`](tests/ui/test_ui_bootstrap.py)).
 
 ## Highlights
 
