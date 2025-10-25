@@ -18,14 +18,6 @@ def _make_request() -> Request:
     return Request(scope)
 
 
-class _StubContext:
-    def __enter__(self) -> SimpleNamespace:
-        return SimpleNamespace()
-
-    def __exit__(self, exc_type, exc, tb) -> None:  # noqa: D401 - context protocol
-        return None
-
-
 @pytest.mark.asyncio
 async def test_fetch_liveness_combines_sources(monkeypatch) -> None:
     async def fake_live() -> dict[str, str]:
@@ -161,11 +153,14 @@ async def test_fetch_service_badges_returns_sorted(monkeypatch) -> None:
             ),
         }
 
-    monkeypatch.setattr("app.ui.services.system.session_scope", lambda: _StubContext())
+    async def fake_run_session(func, *, factory=None):  # noqa: ARG001
+        return func(SimpleNamespace())
+
     monkeypatch.setattr(
         "app.ui.services.system.evaluate_all_service_health",
         fake_evaluate,
     )
+    monkeypatch.setattr("app.ui.services.system.run_session", fake_run_session)
 
     service = SystemUiService(integration_service=SimpleNamespace())
     badges = await service.fetch_service_badges()

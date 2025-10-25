@@ -6,13 +6,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from json import JSONDecodeError, loads
+from typing import TYPE_CHECKING
 
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 from starlette.responses import Response as StarletteResponse
 
 from app.api import health as health_api, system as system_api
-from app.db import session_scope
+from app.db import run_session
 from app.dependencies import get_integration_service
 from app.errors import AppError, ErrorCode
 from app.logging import get_logger
@@ -23,6 +24,9 @@ try:
     from app.utils.service_health import evaluate_all_service_health
 except Exception:  # pragma: no cover - optional dependency
     evaluate_all_service_health = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:
+    from app.utils.service_health import ServiceHealth
 
 logger = get_logger(__name__)
 
@@ -81,6 +85,16 @@ class ServiceHealthBadge:
     status: str
     missing: Sequence[str]
     optional_missing: Sequence[str]
+
+
+async def _load_service_health_evaluations() -> Mapping[str, "ServiceHealth"]:
+    if evaluate_all_service_health is None:
+        return {}
+
+    def _evaluate(session: Session) -> Mapping[str, "ServiceHealth"]:
+        return dict(evaluate_all_service_health(session))
+
+    return await run_session(_evaluate)
 
 
 class SystemUiService:
@@ -288,11 +302,7 @@ class SystemUiService:
         )
 
     async def fetch_service_badges(self) -> Sequence[ServiceHealthBadge]:
-        if evaluate_all_service_health is None:
-            return ()
-
-        with session_scope() as session:
-            evaluations = evaluate_all_service_health(session)
+        evaluations = await _load_service_health_evaluations()
 
         badges = [
             ServiceHealthBadge(
