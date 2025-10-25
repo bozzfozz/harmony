@@ -87,11 +87,11 @@ class ServiceHealthBadge:
     optional_missing: Sequence[str]
 
 
-async def _load_service_health_evaluations() -> Mapping[str, "ServiceHealth"]:
+async def _load_service_health_evaluations() -> Mapping[str, ServiceHealth]:
     if evaluate_all_service_health is None:
         return {}
 
-    def _evaluate(session: Session) -> Mapping[str, "ServiceHealth"]:
+    def _evaluate(session: Session) -> Mapping[str, ServiceHealth]:
         return dict(evaluate_all_service_health(session))
 
     return await run_session(_evaluate)

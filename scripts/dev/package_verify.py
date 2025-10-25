@@ -3,13 +3,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from collections.abc import Callable, Iterable, Sequence
+from datetime import UTC, datetime
 import json
 from pathlib import Path
 import shutil
 import subprocess
 import sys
-from typing import Callable, Iterable, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -24,7 +24,7 @@ def _log(action: str, status: str, **metadata: object) -> None:
     """Emit a structured log line for observability."""
 
     payload: dict[str, object] = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "agent": "package-verify",
         "action": action,
         "status": status,
