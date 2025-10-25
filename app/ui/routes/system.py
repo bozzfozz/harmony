@@ -229,7 +229,8 @@ async def system_secret_card(
     request: Request,
     session: UiSession = Depends(require_role("operator")),
 ) -> Response:
-    cards = build_system_secret_cards()
+    can_validate = session.allows("admin")
+    cards = build_system_secret_cards(can_validate=can_validate)
     card = select_system_secret_card(cards, provider)
     if card is None:
         return _render_alert_fragment(
@@ -268,7 +269,8 @@ async def system_validate_secret(
     service: SystemUiService = Depends(get_system_ui_service),
     session_factory: SessionFactory = Depends(get_session_factory),
 ) -> Response:
-    cards = build_system_secret_cards()
+    can_validate = session.allows("admin")
+    cards = build_system_secret_cards(can_validate=can_validate)
     base_card = select_system_secret_card(cards, provider)
     if base_card is None:
         return _render_alert_fragment(

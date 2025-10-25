@@ -59,6 +59,17 @@ def test_build_system_page_context_registers_fragments() -> None:
     assert spotify_card.slug == "spotify"
     assert spotify_card.provider == "spotify_client_secret"
     assert spotify_card.form.action.endswith("/ui/system/secrets/spotify_client_secret")
+    assert spotify_card.can_validate
+
+
+def test_build_system_page_context_marks_secret_cards_for_non_admin() -> None:
+    request = _make_request()
+    session = _make_session(role="operator")
+
+    context = build_system_page_context(request, session=session, csrf_token="token")
+
+    cards = context["secret_cards"]
+    assert all(not card.can_validate for card in cards)
 
 
 def test_build_system_page_context_uses_metrics_proxy_route() -> None:
@@ -138,7 +149,7 @@ def test_build_system_service_health_context_formats_missing() -> None:
 
 
 def test_secret_card_helpers_attach_results() -> None:
-    cards = build_system_secret_cards()
+    cards = build_system_secret_cards(can_validate=True)
     spotify_card = select_system_secret_card(cards, "spotify_client_secret")
     assert spotify_card is not None
     assert select_system_secret_card(cards, "spotify") is spotify_card
@@ -162,3 +173,4 @@ def test_secret_card_helpers_attach_results() -> None:
     result = context["card"].result
     assert isinstance(result, SecretValidationResultView)
     assert result.badge.variant == "success"
+    assert context["card"].can_validate

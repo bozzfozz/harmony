@@ -37,7 +37,7 @@ from .base import (
     _safe_url_for,
     _system_status_badge,
 )
-def _build_secret_cards() -> tuple[SecretValidationCard, ...]:
+def _build_secret_cards(*, can_validate: bool) -> tuple[SecretValidationCard, ...]:
     providers = (
         (
             "spotify",
@@ -78,6 +78,7 @@ def _build_secret_cards() -> tuple[SecretValidationCard, ...]:
                 description_key=description_key,
                 form=form,
                 target_id=f"hx-{identifier}",
+                can_validate=can_validate,
             )
         )
     return tuple(cards)
@@ -190,7 +191,8 @@ def build_system_page_context(
         submit_label_key="system.services.refresh",
     )
 
-    secret_cards = build_system_secret_cards()
+    can_validate_secrets = session.allows("admin")
+    secret_cards = build_system_secret_cards(can_validate=can_validate_secrets)
     metrics_url = _safe_url_for(request, "system_metrics_proxy", "/ui/system/metrics")
 
     return {
@@ -311,8 +313,8 @@ def build_system_service_health_context(
     }
 
 
-def build_system_secret_cards() -> tuple[SecretValidationCard, ...]:
-    return _build_secret_cards()
+def build_system_secret_cards(*, can_validate: bool = False) -> tuple[SecretValidationCard, ...]:
+    return _build_secret_cards(can_validate=can_validate)
 
 
 def select_system_secret_card(

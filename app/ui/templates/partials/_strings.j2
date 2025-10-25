@@ -456,6 +456,10 @@
   {{ labels.get(key, key) }}
 {%- endmacro %}
 
+{% macro system_secret_admin_required() -%}
+  Administrator access is required to validate secrets.
+{%- endmacro %}
+
 {% macro system_secret_mode(key) -%}
   {%- set labels = {
     "system.secrets.mode.live": "Live value",
