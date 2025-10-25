@@ -597,8 +597,121 @@
   }
 
   var sourceUrl = body.dataset.liveSource || '/ui/events';
+  var hasDowngradedToPolling = false;
+
+  var POLLING_INTERVAL_DEFAULTS = {
+    downloads: 15,
+    jobs: 15,
+    watchlist: 30,
+    activity: 60,
+  };
+
+  var parseIntervalSeconds = function (value) {
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+    var numeric = Number(value);
+    if (!isFinite(numeric) || !(numeric > 0)) {
+      return null;
+    }
+    return numeric;
+  };
+
+  var ensurePollingTrigger = function (element, intervalSeconds) {
+    if (!element || !(intervalSeconds > 0)) {
+      return;
+    }
+    var trigger = element.getAttribute('hx-trigger');
+    if (typeof trigger !== 'string') {
+      trigger = '';
+    }
+    if (/\bevery\s+/i.test(trigger)) {
+      return;
+    }
+    var parts = trigger.split(',');
+    var cleaned = [];
+    for (var i = 0; i < parts.length; i += 1) {
+      var part = parts[i];
+      if (part && part.trim()) {
+        cleaned.push(part.trim());
+      }
+    }
+    if (!cleaned.length) {
+      cleaned.push('load');
+    }
+    cleaned.push('every ' + String(Math.round(intervalSeconds)) + 's');
+    element.setAttribute('hx-trigger', cleaned.join(', '));
+  };
+
+  var downgradeToPolling = function (reason) {
+    if (hasDowngradedToPolling) {
+      return;
+    }
+    hasDowngradedToPolling = true;
+
+    if (body && body.dataset) {
+      body.dataset.liveUpdates = 'polling';
+    }
+
+    var fragments = [];
+    if (document && typeof document.querySelectorAll === 'function') {
+      fragments = document.querySelectorAll('[data-live-event]') || [];
+    }
+
+    for (var i = 0; i < fragments.length; i += 1) {
+      var fragment = fragments[i];
+      if (!fragment || !fragment.dataset) {
+        continue;
+      }
+      var dataset = fragment.dataset;
+      var interval = parseIntervalSeconds(dataset.livePollingInterval);
+      if (interval === null) {
+        var eventName = dataset.liveEvent || '';
+        if (eventName && Object.prototype.hasOwnProperty.call(POLLING_INTERVAL_DEFAULTS, eventName)) {
+          interval = POLLING_INTERVAL_DEFAULTS[eventName];
+        }
+      }
+      if (interval === null) {
+        continue;
+      }
+      dataset.livePollingInterval = String(Math.round(interval));
+      ensurePollingTrigger(fragment, interval);
+    }
+
+    var htmxInstance = window.htmx;
+    if (htmxInstance && typeof htmxInstance.process === 'function') {
+      htmxInstance.process(body || document);
+    }
+
+    var controller = window.__harmonyPollingController;
+    if (controller && typeof controller._scheduleRescan === 'function') {
+      try {
+        controller._scheduleRescan();
+      } catch (controllerError) {
+        console.warn('ui.live_updates.polling_rescan_failed', controllerError);
+      }
+    }
+
+    if (typeof window.dispatchEvent === 'function' && typeof window.CustomEvent === 'function') {
+      try {
+        window.dispatchEvent(
+          new window.CustomEvent('harmony:live-updates:fallback', {
+            detail: { reason: reason || 'unknown', mode: 'polling' },
+          })
+        );
+      } catch (eventError) {
+        console.warn('ui.live_updates.fallback_event_failed', eventError);
+      }
+    }
+
+    if (console && typeof console.info === 'function') {
+      console.info('ui.live_updates.fallback', { reason: reason || 'unknown', mode: 'polling' });
+    }
+  };
+
   var EventSourceConstructor = window.EventSource;
   if (!EventSourceConstructor) {
+    downgradeToPolling('unsupported');
     return;
   }
 
@@ -682,6 +795,7 @@
     eventSource = new EventSourceConstructor(sourceUrl);
   } catch (error) {
     console.warn('ui.events.connection_failed', error);
+    downgradeToPolling('connection_failed');
     return;
   }
 

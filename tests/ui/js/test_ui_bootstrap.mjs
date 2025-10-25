@@ -12,16 +12,19 @@ const bootstrapPath = path.resolve(
 );
 const bootstrapSource = fs.readFileSync(bootstrapPath, "utf8");
 
-function createBootstrapContext(token = "csrf-token-value") {
+function createBootstrapContext(token = "csrf-token-value", options = {}) {
   const documentListeners = Object.create(null);
 
   const body = {
     dataset: {
       liveUpdates: "disabled",
+      ...(options.bodyDataset || {}),
     },
     addEventListener() {},
     removeEventListener() {},
   };
+
+  const fallbackFragments = options.liveFragments || [];
 
   const meta = {
     getAttribute(name) {
@@ -44,7 +47,10 @@ function createBootstrapContext(token = "csrf-token-value") {
       }
       return null;
     },
-    querySelectorAll() {
+    querySelectorAll(selector) {
+      if (selector === "[data-live-event]") {
+        return fallbackFragments;
+      }
       return [];
     },
     getElementById() {
@@ -71,20 +77,25 @@ function createBootstrapContext(token = "csrf-token-value") {
     },
   };
 
-  const htmx = {};
+  const htmx = options.htmx || {};
 
   const window = {
     document,
     htmx,
-    EventSource: null,
+    EventSource:
+      Object.prototype.hasOwnProperty.call(options, "EventSource")
+        ? options.EventSource
+        : null,
     addEventListener() {},
+    __harmonyPollingController: options.pollingController || null,
   };
   window.window = window;
+  window.console = options.console || console;
 
   const context = {
     window,
     document,
-    console,
+    console: window.console,
     globalThis: window,
     htmx,
   };
@@ -109,6 +120,85 @@ assert.equal(
   eventDetail.headers["X-CSRF-Token"],
   token,
   "CSRF token header is injected",
+);
+
+const downgradeLogs = [];
+const htmxProcessCalls = [];
+const pollingController = {
+  rescanRequested: false,
+  _scheduleRescan() {
+    this.rescanRequested = true;
+  },
+};
+
+const fragmentElement = {
+  attributes: { "hx-trigger": "revealed" },
+  dataset: { liveEvent: "watchlist" },
+  getAttribute(name) {
+    return this.attributes[name] || null;
+  },
+  setAttribute(name, value) {
+    this.attributes[name] = value;
+  },
+};
+
+const {
+  body: sseBody,
+  documentListeners: sseListeners,
+} = createBootstrapContext(token, {
+  bodyDataset: { liveUpdates: "sse" },
+  liveFragments: [fragmentElement],
+  htmx: {
+    process(element) {
+      htmxProcessCalls.push(element);
+    },
+  },
+  pollingController,
+  console: {
+    info(message, details) {
+      downgradeLogs.push({ message, details });
+    },
+    warn() {},
+  },
+});
+
+void sseListeners; // ensure eslint-like tools treat as used when linting.
+
+assert.equal(
+  sseBody.dataset.liveUpdates,
+  "polling",
+  "fallback switches body dataset to polling",
+);
+assert.equal(
+  fragmentElement.getAttribute("hx-trigger"),
+  "revealed, every 30s",
+  "fragment trigger restored to polling interval",
+);
+assert.equal(
+  fragmentElement.dataset.livePollingInterval,
+  "30",
+  "polling interval stored on fragment dataset",
+);
+assert.equal(
+  htmxProcessCalls.includes(sseBody),
+  true,
+  "htmx.process invoked for fallback",
+);
+assert.equal(
+  pollingController.rescanRequested,
+  true,
+  "polling controller rescan requested",
+);
+assert.equal(downgradeLogs.length > 0, true, "downgrade emits console log");
+assert.equal(
+  downgradeLogs[0].message,
+  "ui.live_updates.fallback",
+  "log message uses expected name",
+);
+assert.equal(
+  downgradeLogs[0].details.reason,
+  "unsupported",
+  "log includes downgrade reason",
 );
 
 console.log("ui-bootstrap tests completed");
