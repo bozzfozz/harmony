@@ -16,8 +16,10 @@ Harmony nutzt den GitHub-Actions-Workflow [`backend-ci`](../../.github/workflows
 
 ## Branch Protection & Evidence
 
-- Pull Requests benötigen einen erfolgreichen Durchlauf des Required-Status-Checks `backend-ci`.
-- Maintainer prüfen die GitHub-Actions-Protokolle (`backend-ci`) sowie die angehängten Logs der lokalen Pflichtläufe, bevor sie freigeben.
+- Pull Requests benötigen einen erfolgreichen Durchlauf der Required-Status-Checks `backend-ci` **und** `release-check`.
+- Der Workflow [`release-check`](../../.github/workflows/release-check.yml) läuft automatisch für Branches `release/**` sowie Tags `v*` und führt `make release-check` inklusive `docs-verify`, `pip-audit` und UI-Smoke-Test aus.
+- Die Workflow-Logs werden als Artefakt `release-check-logs` gespeichert und enthalten die Datei `reports/release-check/release-check.log` als revisionssicheren Nachweis.
+- Maintainer prüfen die GitHub-Actions-Protokolle (`backend-ci`, `release-check`) sowie die angehängten Logs der lokalen Pflichtläufe, bevor sie freigeben.
 - PRs ohne Wiring-/Removal-Report oder ohne Logs der Pflichtläufe dürfen nicht gemergt werden.
 - Speichere relevante Terminalausgaben in `reports/` (aus dem `.gitignore`) oder im PR-Body.
 
