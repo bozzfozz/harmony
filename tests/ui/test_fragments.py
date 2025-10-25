@@ -2144,7 +2144,7 @@ def test_soulseek_downloads_fragment_all_scope(monkeypatch) -> None:
 def test_soulseek_discography_jobs_fragment_success(monkeypatch) -> None:
     jobs = [_make_discography_job(7, artist_name="Artist Seven", artist_id="soulseek:artist-7")]
 
-    def _fake_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
+    async def _fake_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
         return jobs
 
     monkeypatch.setattr("app.ui.routes.soulseek._load_discography_jobs", _fake_load)
@@ -2166,7 +2166,7 @@ def test_soulseek_discography_jobs_fragment_success(monkeypatch) -> None:
 
 
 def test_soulseek_discography_jobs_fragment_failure(monkeypatch) -> None:
-    def _raise_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
+    async def _raise_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
         raise RuntimeError("database offline")
 
     monkeypatch.setattr("app.ui.routes.soulseek._load_discography_jobs", _raise_load)
@@ -2219,7 +2219,7 @@ def test_soulseek_discography_job_modal_feature_disabled(monkeypatch) -> None:
 def test_soulseek_discography_jobs_submit_success(monkeypatch) -> None:
     jobs = [_make_discography_job(11, artist_name="Artist Eleven", artist_id="soulseek:artist-11")]
 
-    def _fake_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
+    async def _fake_load(limit: int = 25) -> list[Any]:  # pragma: no cover - signature compatibility
         return jobs
 
     monkeypatch.setattr("app.ui.routes.soulseek._load_discography_jobs", _fake_load)
@@ -2396,10 +2396,11 @@ def test_soulseek_download_lyrics_modal_renders_modal(monkeypatch) -> None:
             "has_lyrics": True,
         },
     )()
-    stub_session = _StubDbSession(download)
-    monkeypatch.setattr(
-        "app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(stub_session)
-    )
+
+    async def _fake_lookup(download_id: int, callback: Any) -> tuple[Any, Any]:
+        return callback(object(), download)
+
+    monkeypatch.setattr("app.ui.routes.soulseek._run_download_lookup", _fake_lookup)
     monkeypatch.setattr(
         "app.ui.routes.soulseek.api_soulseek_download_lyrics",
         lambda **_: PlainTextResponse("Line 1\nLine 2"),
@@ -2429,10 +2430,11 @@ def test_soulseek_download_lyrics_modal_pending(monkeypatch) -> None:
             "has_lyrics": False,
         },
     )()
-    stub_session = _StubDbSession(download)
-    monkeypatch.setattr(
-        "app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(stub_session)
-    )
+
+    async def _fake_lookup(download_id: int, callback: Any) -> tuple[Any, Any]:
+        return callback(object(), download)
+
+    monkeypatch.setattr("app.ui.routes.soulseek._run_download_lookup", _fake_lookup)
     monkeypatch.setattr(
         "app.ui.routes.soulseek.api_soulseek_download_lyrics",
         lambda **_: JSONResponse({"status": "pending"}, status_code=202),
@@ -2451,10 +2453,11 @@ def test_soulseek_download_lyrics_modal_pending(monkeypatch) -> None:
 
 def test_soulseek_download_metadata_modal_renders_modal(monkeypatch) -> None:
     download = type("Download", (), {"id": 51, "filename": "meta.flac"})()
-    stub_session = _StubDbSession(download)
-    monkeypatch.setattr(
-        "app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(stub_session)
-    )
+
+    async def _fake_lookup(download_id: int, callback: Any) -> tuple[Any, Any]:
+        return callback(object(), download)
+
+    monkeypatch.setattr("app.ui.routes.soulseek._run_download_lookup", _fake_lookup)
     metadata = type(
         "Metadata",
         (),
@@ -2486,10 +2489,11 @@ def test_soulseek_download_metadata_modal_renders_modal(monkeypatch) -> None:
 
 def test_soulseek_download_metadata_modal_handles_error(monkeypatch) -> None:
     download = type("Download", (), {"id": 77, "filename": "error.flac"})()
-    stub_session = _StubDbSession(download)
-    monkeypatch.setattr(
-        "app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(stub_session)
-    )
+
+    async def _fake_lookup(download_id: int, callback: Any) -> tuple[Any, Any]:
+        return callback(object(), download)
+
+    monkeypatch.setattr("app.ui.routes.soulseek._run_download_lookup", _fake_lookup)
 
     def _raise_metadata(**_: object) -> None:
         raise HTTPException(status_code=500, detail="metadata failure")
@@ -2517,12 +2521,13 @@ def test_soulseek_download_artwork_modal_renders_modal(monkeypatch) -> None:
             "has_artwork": True,
         },
     )()
-    stub_session = _StubDbSession(download)
-    monkeypatch.setattr(
-        "app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(stub_session)
-    )
 
-    async def _noop_artwork(**_: object) -> None:
+    async def _fake_lookup(download_id: int, callback: Any) -> Any:
+        return callback(object(), download)
+
+    monkeypatch.setattr("app.ui.routes.soulseek._run_download_lookup", _fake_lookup)
+
+    def _noop_artwork(**_: object) -> None:
         return None
 
     monkeypatch.setattr("app.ui.routes.soulseek.api_soulseek_download_artwork", _noop_artwork)
@@ -2551,10 +2556,11 @@ def test_soulseek_download_artwork_modal_handles_error(monkeypatch) -> None:
             "has_artwork": False,
         },
     )()
-    stub_session = _StubDbSession(download)
-    monkeypatch.setattr(
-        "app.ui.routes.soulseek.session_scope", lambda: _StubSessionContext(stub_session)
-    )
+
+    async def _fake_lookup(download_id: int, callback: Any) -> Any:
+        return callback(object(), download)
+
+    monkeypatch.setattr("app.ui.routes.soulseek._run_download_lookup", _fake_lookup)
 
     def _raise_artwork(**_: object) -> None:
         raise HTTPException(status_code=404, detail="missing artwork")
