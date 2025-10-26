@@ -15,7 +15,7 @@ Harmony verlässt sich weiterhin auf nachvollziehbare lokale Gates. Ergänzend p
 | `make test`               | `scripts/dev/test_py.sh`            | Erstellt eine SQLite-Testdatenbank unter `.tmp/test.db` und startet `pytest -q`. Benötigt Node.js ≥ 18 für den UI-Bootstrap-Test [`tests/ui/test_ui_bootstrap.py`](../../tests/ui/test_ui_bootstrap.py). |
 | `make be-verify`          | —                                   | Alias für `make test`; dient als explizites Backend-Gate im `make all`-Lauf. |
 | `make supply-guard`       | `scripts/dev/supply_guard.sh`       | Prüft auf versehentlich eingecheckte Node-Build-Artefakte. |
-| `make smoke`              | `scripts/dev/smoke_unified.sh`      | Startet `uvicorn app.main:app`, pingt bis zu 60 Sekunden `http://127.0.0.1:${APP_PORT}${SMOKE_PATH}` und beendet den Prozess kontrolliert; optional wird ein vorhandenes Unified-Docker-Image geprüft. |
+| `make smoke`              | `scripts/dev/smoke_unified.sh`      | Startet `uvicorn app.main:app`, pingt bis zu 60 Sekunden `http://127.0.0.1:${APP_PORT}${SMOKE_PATH}` und beendet den Prozess kontrolliert; führt anschließend einen optionalen Readiness-Ping gegen `/api/health/ready?verbose=1` aus (`SMOKE_READY_CHECK=warn` standard, `strict` erzwingt einen Fehler). Optional wird ein vorhandenes Unified-Docker-Image geprüft. |
 | `make all`                | —                                   | Kombiniert `fmt lint dep-sync be-verify supply-guard smoke` in fester Reihenfolge (der `lint`-Schritt umfasst Ruff und MyPy). |
 | `make release-check`      | —                                   | Führt `make all`, anschließend `make docs-verify`, `make pip-audit` und `make ui-smoke` aus; dient als finales Release-Gate. |
 

@@ -62,7 +62,7 @@ docker run -d \
     beyond trusted networks.
 - Edit `/data/harmony.yml` to tailor Harmony; environment variables still win
   over values defined in the YAML.
-- Verify the deployment with `curl -fsS http://127.0.0.1:8080/live` and
+- Verify the deployment with `curl -fsS http://127.0.0.1:8080/api/health/live` and
   `curl -fsS "http://127.0.0.1:8080/api/health/ready?verbose=1"`.
   The versioned system endpoints live under `/api/v1/...`; see
   [`docs/ui/fe-htmx-plan.md`](docs/ui/fe-htmx-plan.md) for the UI wiring overview.
@@ -79,8 +79,8 @@ environment and see [`docs/install/docker.md`](docs/install/docker.md) for
 additional deployment notes.
 
 > The canonical backend version lives in [`app/version.py`](app/version.py).
-> Harmony v**1.0.0** exposes the same number via `/live`, `/env` and the
-> OpenAPI schema so pinned deployments and health checks stay in sync.
+> Harmony v**1.0.0** exposes the same number via `/api/health/live`, `/live`, `/env`
+> and the OpenAPI schema so pinned deployments and health checks stay in sync.
 
 ## Minimal configuration
 
@@ -105,7 +105,8 @@ trusted network.
 
 ## Health checks
 
-- `GET /live` → returns `{ "status": "ok" }` without touching external dependencies.
+- `GET /api/health/live` → returns `{ "status": "ok" }` without touching external dependencies.
+  `/live` remains available as a backwards-compatible alias.
 - `GET /api/health/ready` → performs SQLite and integration checks. Use `?verbose=1` to
   inspect individual probes.
 - `GET /api/v1/status` → reports uptime, worker state and connection summaries for the UI dashboard.

@@ -4,7 +4,7 @@ Harmony exposes lightweight endpoints for infrastructure health checks and relie
 
 ## Health
 
-### `GET /live`
+### `GET /api/health/live`
 - **Purpose:** Minimal liveness probe without external I/O.
 - **Response:**
   ```json
@@ -12,7 +12,7 @@ Harmony exposes lightweight endpoints for infrastructure health checks and relie
     "status": "ok"
   }
   ```
-- **Notes:** Always returns `200 OK` once the process binds to `0.0.0.0:8080`. The same payload is exposed via `/api/health/live` for API clients.
+- **Notes:** Always returns `200 OK` once the process binds to `0.0.0.0:8080`. `/live` remains as a compatibility alias for infrastructure still pinned to the legacy path.
 
 ### `GET /api/v1/ready`
 - **Purpose:** Readiness probe checking the database connection and configured downstream integrations.
@@ -88,7 +88,7 @@ A typical log record looks like:
   "event": "api.request",
   "component": "api",
   "method": "GET",
-  "path": "/live",
+  "path": "/api/health/live",
   "status": "ok",
   "status_code": 200,
   "duration_ms": 2.14,

@@ -38,11 +38,11 @@ from app.config import load_runtime_env, resolve_app_port
 
 env = load_runtime_env()
 port = resolve_app_port(env)
-path_value = (env.get("SMOKE_PATH") or "/live").strip()
+path_value = (env.get("SMOKE_PATH") or "/api/health/live").strip()
 if not path_value.startswith("/"):
     path_value = f"/{path_value}"
 print(port)
-print(path_value or "/live")
+print(path_value or "/api/health/live")
 PY
 )
 
@@ -60,7 +60,7 @@ if [[ -z "$PORT" || ! "$PORT" =~ ^[0-9]+$ ]]; then
 fi
 
 if [[ -z "$PATH_SUFFIX" ]]; then
-  PATH_SUFFIX=/live
+  PATH_SUFFIX=/api/health/live
 fi
 
 export APP_PORT="$PORT"
@@ -136,7 +136,7 @@ dump_container_diagnostics() {
 $PYTHON_BIN -m uvicorn app.main:app --host "$SERVER_HOST" --port "$PORT" >"$SMOKE_LOG" 2>&1 &
 SERVER_PID=$!
 
-LISTEN_MARKER="listening on 0.0.0.0:${PORT} path=/live"
+LISTEN_MARKER="listening on 0.0.0.0:${PORT}"
 LISTEN_RETRIES=60
 while (( LISTEN_RETRIES > 0 )); do
   if grep -Fq "$LISTEN_MARKER" "$SMOKE_LOG" 2>/dev/null; then
@@ -171,6 +171,68 @@ until curl --fail --silent --show-error "$TARGET_URL" >/dev/null 2>&1; do
 done
 
 echo "Backend smoke check passed: ${PATH_SUFFIX} returned 200."
+
+READY_CHECK_MODE=${SMOKE_READY_CHECK:-warn}
+READY_PATH_SUFFIX=${SMOKE_READY_PATH:-/api/health/ready?verbose=1}
+if [[ -n "$READY_PATH_SUFFIX" && "${READY_PATH_SUFFIX:0:1}" != "/" ]]; then
+  READY_PATH_SUFFIX="/${READY_PATH_SUFFIX}"
+fi
+
+normalize_ready_mode() {
+  local value="${1,,}"
+  case "$value" in
+    0|off|skip|disabled|false)
+      echo "off"
+      ;;
+    strict|require|required|1|true)
+      echo "strict"
+      ;;
+    warn|soft|default|on|auto|*)
+      echo "warn"
+      ;;
+  esac
+}
+
+READY_MODE=$(normalize_ready_mode "$READY_CHECK_MODE")
+
+if [[ "$READY_MODE" != "off" ]]; then
+  READY_URL="http://${CLIENT_HOST}:${PORT}${READY_PATH_SUFFIX}"
+  echo "Probing readiness endpoint ${READY_URL}" >&2
+  READY_RETRIES=30
+  until curl --fail --silent --show-error "$READY_URL" >/dev/null 2>&1; do
+    READY_RETRIES=$((READY_RETRIES - 1))
+    if [[ $READY_RETRIES -le 0 ]]; then
+      echo "Backend readiness check failed. Logs:" >&2
+      dump_smoke_log
+      dump_local_diagnostics
+      if [[ "$READY_MODE" == "strict" ]]; then
+        exit 1
+      fi
+      echo "Readiness probe failed but continuing because SMOKE_READY_CHECK=${READY_CHECK_MODE}." >&2
+      READY_MODE="warn_failed"
+      break
+    fi
+    sleep 2
+    if ! ps -p "$SERVER_PID" >/dev/null 2>&1; then
+      echo "Backend process terminated unexpectedly during readiness check. Logs:" >&2
+      dump_smoke_log
+      dump_local_diagnostics
+      if [[ "$READY_MODE" == "strict" ]]; then
+        exit 1
+      fi
+      echo "Backend exited during readiness probe; continuing because SMOKE_READY_CHECK=${READY_CHECK_MODE}." >&2
+      READY_MODE="warn_failed"
+      break
+    fi
+  done
+  if [[ "$READY_MODE" == "warn" ]]; then
+    echo "Backend readiness check passed: ${READY_PATH_SUFFIX} returned 200."
+  elif [[ "$READY_MODE" == "warn_failed" ]]; then
+    echo "Backend readiness check completed with failures (non-strict mode)." >&2
+  else
+    echo "Backend readiness check passed: ${READY_PATH_SUFFIX} returned 200."
+  fi
+fi
 
 if command -v docker >/dev/null 2>&1; then
   IMAGE=${SMOKE_UNIFIED_IMAGE:-harmony-unified:local}

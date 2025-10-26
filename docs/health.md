@@ -3,14 +3,16 @@
 Harmony exposes two built-in health routes that surface the container status and
 upstream dependency checks.
 
-## `/live`
+## `/api/health/live`
 
 - **Purpose:** Simple liveness probe. Returns HTTP 200 with `{ "status": "ok" }` once
   the application server has started.
 - **Dependencies:** None. The handler does not touch the database or external
   integrations.
 - **Usage:** Suitable for container orchestrator liveness probes or manual smoke tests:
-  `curl -fsS http://127.0.0.1:8080/live`.
+  `curl -fsS http://127.0.0.1:8080/api/health/live`.
+- **Compatibility:** `/live` stays available as a backwards-compatible alias for
+  legacy probes.
 
 ## `/api/health/ready`
 

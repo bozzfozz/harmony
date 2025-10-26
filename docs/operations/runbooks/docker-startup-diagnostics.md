@@ -7,7 +7,7 @@
 - The effective SQLite database URL defaults to `sqlite+aiosqlite:///./harmony.db` when `DATABASE_URL` is unset; parent directories must therefore be writable by the container user.【F:app/runtime/container_entrypoint.py†L269-L314】【F:app/config.py†L1167-L2140】
 
 ## Observed Symptoms
-- `curl http://127.0.0.1:8080/live` returns `connection reset` and subsequently `couldn’t connect`, indicating the process dies shortly after binding.
+- `curl http://127.0.0.1:8080/api/health/live` returns `connection reset` and subsequently `couldn’t connect`, indicating the process dies shortly after binding.
 - Docker container exits on boot; port 8080 closes before the health probe reruns.
 - SQLite database artefacts never appear, implying bootstrap aborted before `ensure_sqlite_database()` finished or the directory is read-only.
 
@@ -17,7 +17,7 @@
    - Smoke environment lacks `/downloads` and `/music` mounts, so the paths resolve to the container filesystem → bootstrap aborts when it cannot create them.
 2. **Health probe hitting legacy path**  
    - Container exposes `/api/health/live` as the canonical liveness path; `/live` is configurable but defaults to the legacy stub for backwards compatibility.【F:app/runtime/container_entrypoint.py†L340-L404】
-   - Smoke test polls `/live`, which responds 404/connection reset even on success, masking real readiness.
+   - Probes against `/live` may succeed even when the canonical endpoint fails, masking real readiness regressions. Update automation to target `/api/health/live`.
 3. **SQLite bootstrap blocked**  
    - When no `DATABASE_URL` is provided, Harmony stores `harmony.db` beside the app bundle; read-only mounts or volume misconfiguration prevent file creation, triggering a `BootstrapError`.【F:app/runtime/container_entrypoint.py†L269-L314】
 
