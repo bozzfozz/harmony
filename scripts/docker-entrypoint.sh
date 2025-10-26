@@ -1,17 +1,29 @@
 #!/usr/bin/env sh
 set -euo pipefail
 
+log_info() {
+  printf '[entrypoint] %s\n' "$1"
+}
+
 if [ -n "${UMASK:-}" ]; then
+  log_info "validating UMASK=${UMASK}"
   if ! umask "$UMASK" 2>/dev/null; then
     echo "Error: Invalid UMASK value '$UMASK'." >&2
     exit 1
   fi
+  log_info "applied UMASK=$(umask)"
+else
+  log_info "UMASK not provided; using container default $(umask)"
 fi
 
 if [ -z "${DATABASE_URL:-}" ]; then
   export DATABASE_URL="sqlite+aiosqlite:///data/harmony.db"
-  echo "DATABASE_URL not provided; using ${DATABASE_URL}."
+  log_info "DATABASE_URL not provided; using ${DATABASE_URL}."
+else
+  log_info "received DATABASE_URL=${DATABASE_URL}"
 fi
+
+log_info "starting filesystem and database bootstrap"
 
 case "${DATABASE_URL}" in
   sqlite+aiosqlite://*|sqlite+pysqlite://*|sqlite://*)
@@ -74,7 +86,12 @@ def _ensure_directory(
     gid: int,
     umask_value: int | None,
 ) -> Path:
+    print(
+        f"[startup] preparing {name} directory requested_path={raw_path}",
+        flush=True,
+    )
     candidate = Path(raw_path).expanduser()
+    pre_existing = candidate.exists()
     try:
         candidate.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
@@ -85,7 +102,16 @@ def _ensure_directory(
     if not candidate.is_dir():
         _fail(f"{name} path is not a directory", details={"path": str(candidate)})
     resolved = candidate.resolve()
+    status = "existing" if pre_existing else "created"
+    print(
+        f"[startup] {name} directory ready status={status} path={resolved}",
+        flush=True,
+    )
     if (uid, gid) != (os.getuid(), os.getgid()):
+        print(
+            f"[startup] adjusting ownership for {name} directory path={resolved} target={uid}:{gid}",
+            flush=True,
+        )
         try:
             os.chown(resolved, uid, gid)
         except PermissionError as exc:
@@ -100,6 +126,10 @@ def _ensure_directory(
             )
     if umask_value is not None:
         desired_mode = 0o777 & ~umask_value
+        print(
+            f"[startup] applying permissions for {name} directory path={resolved} mode={oct(desired_mode)}",
+            flush=True,
+        )
         try:
             resolved.chmod(desired_mode)
         except OSError as exc:
@@ -113,6 +143,10 @@ def _ensure_directory(
             )
     probe = resolved / ".harmony-startup-probe"
     try:
+        print(
+            f"[startup] verifying read/write access for {name} directory path={resolved}",
+            flush=True,
+        )
         with open(probe, "w", encoding="utf-8") as handle:
             handle.write("ok")
         with open(probe, "r", encoding="utf-8") as handle:
@@ -132,12 +166,22 @@ def _ensure_directory(
                 f"Unable to clean startup probe for {name} directory",
                 details={"path": str(resolved), "error": str(exc)},
             )
+    print(
+        f"[startup] completed verification for {name} directory path={resolved}",
+        flush=True,
+    )
     return resolved
 
 
 umask_value = _parse_umask(os.environ.get("UMASK"))
 target_uid = _parse_owner(os.environ.get("PUID"), kind="PUID", fallback=os.getuid())
 target_gid = _parse_owner(os.environ.get("PGID"), kind="PGID", fallback=os.getgid())
+
+print(
+    "[startup] bootstrap parameters "
+    f"target_uid={target_uid} target_gid={target_gid} umask={os.environ.get('UMASK', 'default')}",
+    flush=True,
+)
 
 directories = {
     "downloads": os.environ.get("DOWNLOADS_DIR") or DEFAULT_DOWNLOADS_DIR,
@@ -148,7 +192,8 @@ for label, raw in directories.items():
     ensured = _ensure_directory(raw, name=f"{label}", uid=target_uid, gid=target_gid, umask_value=umask_value)
     print(
         "[startup] ensured %s directory path=%s owner=%s:%s"
-        % (label, ensured, target_uid, target_gid)
+        % (label, ensured, target_uid, target_gid),
+        flush=True,
     )
 
 url = make_url(os.environ["DATABASE_URL"])
@@ -158,6 +203,10 @@ if path and path != ":memory:":
     if not resolved.is_absolute():
         resolved = (Path.cwd() / resolved).resolve()
     parent = resolved.parent
+    print(
+        f"[startup] ensuring sqlite database path={resolved}",
+        flush=True,
+    )
     try:
         parent.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
@@ -172,17 +221,33 @@ if path and path != ":memory:":
             "Database parent directory is not writable",
             details={"path": str(parent)},
         )
+    print(
+        f"[startup] database directory ready path={parent}",
+        flush=True,
+    )
     try:
         if resolved.exists():
+            print(
+                f"[startup] found existing sqlite database path={resolved}",
+                flush=True,
+            )
             with open(resolved, "ab"):
                 pass
         else:
+            print(
+                f"[startup] creating sqlite database file path={resolved}",
+                flush=True,
+            )
             resolved.touch(exist_ok=True)
     except OSError as exc:
         _fail(
             "Unable to create or access sqlite database file",
             details={"path": str(resolved), "error": str(exc)},
         )
+    print(
+        f"[startup] sqlite database ready path={resolved}",
+        flush=True,
+    )
 PYTHON
 
 exec python3 - "$@" <<'PYTHON'
@@ -353,10 +418,14 @@ def main(argv: List[str]) -> None:
     target_gid = _parse_owner(
         os.environ.get("PGID"), kind="PGID", fallback=os.getgid()
     )
+    print(
+        f"[entrypoint] requested runtime identity {target_uid}:{target_gid}",
+        flush=True,
+    )
     _drop_privileges(target_uid, target_gid)
     extras = _sanitize_extra_args(_combine_extra_args(argv))
     port = _resolve_port()
-    print(f"[entrypoint] resolved APP_PORT={port}")
+    print(f"[entrypoint] resolved APP_PORT={port}", flush=True)
     python_exec = sys.executable or "python"
     python_version = sys.version.split()[0]
     base_command = [
@@ -372,20 +441,22 @@ def main(argv: List[str]) -> None:
     command = base_command + extras
     cwd = os.getcwd()
 
-    print(f"[entrypoint] python executable: {python_exec}")
-    print(f"[entrypoint] python version: {python_version}")
+    print(f"[entrypoint] python executable: {python_exec}", flush=True)
+    print(f"[entrypoint] python version: {python_version}", flush=True)
     python_path = os.environ.get("PYTHONPATH")
     if python_path:
-        print(f"[entrypoint] PYTHONPATH={python_path}")
+        print(f"[entrypoint] PYTHONPATH={python_path}", flush=True)
     if extras:
         rendered = " ".join(shlex.quote(arg) for arg in extras)
-        print(f"[entrypoint] uvicorn extra args: {rendered}")
+        print(f"[entrypoint] uvicorn extra args: {rendered}", flush=True)
     print(
         "[entrypoint] runtime summary host=%s port=%s module=%s python=%s cwd=%s"
-        % (APP_HOST, port, APP_MODULE, python_version, cwd)
+        % (APP_HOST, port, APP_MODULE, python_version, cwd),
+        flush=True,
     )
     print(
-        f"[entrypoint] starting uvicorn for {APP_MODULE} on {APP_HOST}:{port} (live={LIVE_PATH})"
+        f"[entrypoint] starting uvicorn for {APP_MODULE} on {APP_HOST}:{port} (live={LIVE_PATH})",
+        flush=True,
     )
 
     try:
