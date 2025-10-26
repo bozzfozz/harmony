@@ -65,7 +65,7 @@ docker run -d \
 Verify the deployment:
 
 ```bash
-curl -fsS http://127.0.0.1:8080/live
+curl -fsS http://127.0.0.1:8080/api/health/live
 curl -fsS http://127.0.0.1:8080/api/health/ready?verbose=1
 ```
 

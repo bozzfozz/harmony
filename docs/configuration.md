@@ -37,7 +37,7 @@ configuration payloads. They follow the rules below:
 | `HARMONY_LOG_LEVEL` | `INFO` | `DEBUG` | Global logging level. |
 | `API_BASE_PATH` | `/api/v1` | `/api/v1` | Prefix for public API routes. |
 | `REQUEST_ID_HEADER` | `X-Request-ID` | `X-Correlation-ID` | Header name used to inject request IDs. |
-| `SMOKE_PATH` | `/live` | `/live` | Path used by smoke tests and entrypoint checks. |
+| `SMOKE_PATH` | `/api/health/live` | `/api/health/live` | Path used by smoke tests and entrypoint checks. |
 | `DOWNLOADS_DIR` | `/downloads` | `/downloads` | Temporary workspace for HDM downloads; must be writable. |
 | `MUSIC_DIR` | `/music` | `/music` | Final destination for tagged tracks; must be writable. |
 | `ARTWORK_DIR` | `./artwork` | `/data/artwork` | Storage for downloaded artwork when the feature is enabled. |
@@ -259,7 +259,7 @@ configuration payloads. They follow the rules below:
 | --- | --- | --- | --- |
 | `APP_PORT` aliases | _(n/a)_ | `PORT=8080` | Legacy aliases (`PORT`, `UVICORN_PORT`, `SERVICE_PORT`, `WEB_PORT`, `FRONTEND_PORT`) are auto-normalised to `APP_PORT`. |
 | `APP_ENV` flags | _(n/a)_ | `PYTEST_CURRENT_TEST` | `PYTEST_CURRENT_TEST` is auto-set by pytest to signal test mode. |
-| `SMOKE_PATH` | `/live` | `/live` | Used by smoke scripts; keep aligned with `/live`. |
+| `SMOKE_PATH` | `/api/health/live` | `/api/health/live` | Used by smoke scripts; keep aligned with the liveness probe. |
 
 Refer to [`app/config.py`](../app/config.py) for the authoritative defaults and type
 validation logic. Any variable not set falls back to the values shown above or the code

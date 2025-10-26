@@ -1305,7 +1305,7 @@ _CONFIG_TEMPLATE_SECTIONS: tuple[ConfigTemplateSection, ...] = (
             ConfigTemplateEntry(
                 "REQUEST_ID_HEADER", "X-Request-ID", "Header carrying the request ID."
             ),
-            ConfigTemplateEntry("SMOKE_PATH", "/live", "Path probed by smoke checks."),
+            ConfigTemplateEntry("SMOKE_PATH", "/api/health/live", "Path probed by smoke checks."),
             ConfigTemplateEntry(
                 "UI_LIVE_UPDATES",
                 _DEFAULT_UI_LIVE_UPDATES,
