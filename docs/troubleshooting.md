@@ -26,6 +26,9 @@ self-check CLI (`python -m app.ops.selfcheck --assert-startup`) and the health e
   key/value fields.
 - Use `python -m app.ops.selfcheck --assert-startup` before deployments to validate
   environment configuration and filesystem permissions.
+- The smoke harness (`make smoke`) automatically executes the self-check. Control the
+  behaviour via `SMOKE_SELFCHECK=off|warn|strict` (default: `warn`). In strict mode the
+  harness aborts when startup guards fail.
 - Inspect and replay DLQ entries via the `/api/v1/dlq` endpoints (see
   [DLQ management guide](operations/dlq.md)) if HDM jobs fail repeatedly.
 - Capture the output of `/api/health/ready?verbose=1` and include it when escalating
@@ -33,3 +36,19 @@ self-check CLI (`python -m app.ops.selfcheck --assert-startup`) and the health e
 
 For HDM-specific runbooks see [HDM runbook](operations/runbooks/hdm.md). For Spotify-specific
 advice consult [`docs/auth/spotify.md`](auth/spotify.md).
+
+## Startup Self-Check Reference
+
+Run the guard locally via:
+
+```bash
+python -m app.ops.selfcheck --assert-startup
+```
+
+The command fails fast when directories or databases cannot be created. Structured log
+lines such as `{"event": "sqlite.bootstrap.parent_not_writable", "parent": "/data"}`
+indicate missing write permissions on the database directory. Resolve permission errors by
+aligning host ownership (`chown <uid>:<gid> <path>`) with the container's `PUID`/`PGID`
+or by mounting writable directories. Re-run the command until it returns exit code `0`
+and confirms `"event": "sqlite.bootstrap.ready"` for the SQLite path. The smoke harness
+emits the same events, making failures visible early in CI and local workflows.

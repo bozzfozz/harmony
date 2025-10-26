@@ -24,6 +24,21 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
+normalize_guard_mode() {
+  local value="${1,,}"
+  case "$value" in
+    0|off|skip|disabled|false)
+      echo "off"
+      ;;
+    strict|require|required|1|true)
+      echo "strict"
+      ;;
+    warn|soft|default|on|auto|*)
+      echo "warn"
+      ;;
+  esac
+}
+
 if [[ -n "${SMOKE_SERVER_HOST:-}" ]]; then
   SERVER_HOST=${SMOKE_SERVER_HOST}
 elif [[ -n "${SMOKE_HOST:-}" ]]; then
@@ -83,6 +98,20 @@ export SLSKD_PORT=${SLSKD_PORT:-5030}
 export DOWNLOADS_DIR=${DOWNLOADS_DIR:-$TMP_DIR/downloads}
 export MUSIC_DIR=${MUSIC_DIR:-$TMP_DIR/music}
 mkdir -p "$DOWNLOADS_DIR" "$MUSIC_DIR"
+
+SELFCHECK_MODE_RAW=${SMOKE_SELFCHECK:-warn}
+SELFCHECK_MODE=$(normalize_guard_mode "$SELFCHECK_MODE_RAW")
+if [[ "$SELFCHECK_MODE" != "off" ]]; then
+  echo "Running startup self-check (--assert-startup) [mode=$SELFCHECK_MODE_RAW]" >&2
+  if "$PYTHON_BIN" -m app.ops.selfcheck --assert-startup; then
+    echo "Startup self-check passed." >&2
+  else
+    echo "Startup self-check failed." >&2
+    if [[ "$SELFCHECK_MODE" == "strict" ]]; then
+      exit 1
+    fi
+  fi
+fi
 
 SMOKE_LOG="$TMP_DIR/smoke.log"
 : > "$SMOKE_LOG"
@@ -178,22 +207,7 @@ if [[ -n "$READY_PATH_SUFFIX" && "${READY_PATH_SUFFIX:0:1}" != "/" ]]; then
   READY_PATH_SUFFIX="/${READY_PATH_SUFFIX}"
 fi
 
-normalize_ready_mode() {
-  local value="${1,,}"
-  case "$value" in
-    0|off|skip|disabled|false)
-      echo "off"
-      ;;
-    strict|require|required|1|true)
-      echo "strict"
-      ;;
-    warn|soft|default|on|auto|*)
-      echo "warn"
-      ;;
-  esac
-}
-
-READY_MODE=$(normalize_ready_mode "$READY_CHECK_MODE")
+READY_MODE=$(normalize_guard_mode "$READY_CHECK_MODE")
 
 if [[ "$READY_MODE" != "off" ]]; then
   READY_URL="http://${CLIENT_HOST}:${PORT}${READY_PATH_SUFFIX}"
