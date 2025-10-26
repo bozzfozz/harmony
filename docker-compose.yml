@@ -1,0 +1,23 @@
+services:
+  harmony:
+    image: ghcr.io/bozzfozz/harmony:lsio
+    container_name: harmony
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      # - UMASK=022
+      # - SQLALCHEMY_DATABASE_URL=sqlite:////config/harmony.db
+    volumes:
+      - ./config:/config
+      - ./downloads:/downloads
+      - ./music:/music
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/health/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
