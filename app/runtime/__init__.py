@@ -1,3 +1,3 @@
 """Runtime helpers for containerised deployments."""
 
-__all__ = []
+__all__: list[str] = []

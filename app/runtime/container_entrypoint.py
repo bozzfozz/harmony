@@ -50,7 +50,7 @@ def log_info(prefix: str, message: str) -> None:
 def log_failure(
     prefix: str, error: RuntimeError, *, details: Mapping[str, str] | None = None
 ) -> None:
-    meta = []
+    meta: list[str] = []
     if isinstance(error, BootstrapError | EntrypointError):
         meta.extend(f"{key}={value}" for key, value in error.details.items())
     if details:
@@ -358,10 +358,8 @@ def sanitize_extra_args(raw_args: Sequence[str]) -> list[str]:
             index += 1
             continue
         raise EntrypointError(
-            
-                "Startup arguments must be uvicorn options. "
-                "Provide additional flags via UVICORN_EXTRA_ARGS."
-            
+            "Startup arguments must be uvicorn options. "
+            "Provide additional flags via UVICORN_EXTRA_ARGS."
         )
     return sanitized
 
