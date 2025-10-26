@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 import subprocess
 
 import pytest
@@ -80,13 +81,30 @@ def test_ensure_build_tool_installs_when_missing(tmp_path: Path) -> None:
     assert observed == [package_verify.BUILD_INSTALL_COMMAND]
 
 
+def test_ensure_build_tool_installs_when_loader_missing(tmp_path: Path) -> None:
+    observed: list[tuple[str, ...]] = []
+
+    def fake_runner(command: tuple[str, ...], root: Path) -> None:
+        observed.append(command)
+        assert command == package_verify.BUILD_INSTALL_COMMAND
+        assert root == tmp_path
+
+    package_verify.ensure_build_tool(
+        tmp_path,
+        runner=fake_runner,
+        finder=lambda name: SimpleNamespace(loader=None),
+    )
+
+    assert observed == [package_verify.BUILD_INSTALL_COMMAND]
+
+
 def test_ensure_build_tool_skips_when_available(tmp_path: Path) -> None:
     observed: list[tuple[str, ...]] = []
 
     package_verify.ensure_build_tool(
         tmp_path,
         runner=lambda command, root: observed.append(command),
-        finder=lambda name: object(),
+        finder=lambda name: SimpleNamespace(loader=object()),
     )
 
     assert observed == []
