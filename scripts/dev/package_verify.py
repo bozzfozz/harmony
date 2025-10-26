@@ -80,11 +80,14 @@ def ensure_build_tool(
 ) -> None:
     """Install the build frontend when it is not available."""
 
-    if finder("build") is not None:
+    spec = finder("build")
+    if spec is not None and getattr(spec, "loader", None) is not None:
         _log("dependency", "skipped", name="build")
         return
 
-    _log("dependency", "pending", name="build")
+    reason = "not_found" if spec is None else "missing_loader"
+
+    _log("dependency", "pending", name="build", reason=reason)
     try:
         runner(BUILD_INSTALL_COMMAND, root)
     except Exception:  # pragma: no cover - log and re-raise for observability
