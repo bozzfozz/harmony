@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit ui-guard ui-smoke docs-verify release-check pip-audit package-verify
+.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit ui-guard ui-smoke docs-verify release-check pip-audit package-verify image-lsio smoke-lsio
 .PHONY: supply-guard supply-guard-verbose supply-guard-warn
 .PHONY: foss-scan foss-enforce
 
@@ -20,6 +20,12 @@ dep-sync:
 
 smoke:
 	./scripts/dev/smoke_unified.sh
+
+image-lsio:
+	docker build -f docker/Dockerfile.lsio -t ghcr.io/bozzfozz/harmony:lsio .
+
+smoke-lsio:
+	./scripts/dev/smoke_lsio.sh
 
 doctor:
 	./scripts/dev/doctor.sh
