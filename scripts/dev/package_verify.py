@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
+import importlib.util
 from datetime import UTC, datetime
 import json
 from pathlib import Path
@@ -17,6 +18,14 @@ COMMAND_SEQUENCE: tuple[tuple[str, ...], ...] = (
     (sys.executable, "-m", "pip", "install", "--no-deps", "--force-reinstall", "."),
     (sys.executable, "-m", "pip", "wheel", ".", "-w", "dist/"),
     (sys.executable, "-m", "build"),
+)
+
+BUILD_INSTALL_COMMAND: tuple[str, ...] = (
+    sys.executable,
+    "-m",
+    "pip",
+    "install",
+    "build",
 )
 
 
@@ -64,12 +73,36 @@ def run_command(command: Sequence[str], root: Path) -> None:
     _log("command", "success", command=list(command))
 
 
+def ensure_build_tool(
+    root: Path,
+    runner: Callable[[Sequence[str], Path], None] = run_command,
+    finder: Callable[[str], object | None] = importlib.util.find_spec,
+) -> None:
+    """Install the build frontend when it is not available."""
+
+    if finder("build") is not None:
+        _log("dependency", "skipped", name="build")
+        return
+
+    _log("dependency", "pending", name="build")
+    try:
+        runner(BUILD_INSTALL_COMMAND, root)
+    except Exception:  # pragma: no cover - log and re-raise for observability
+        _log("dependency", "error", name="build")
+        raise
+    _log("dependency", "success", name="build")
+
+
 def run_pipeline(
     root: Path,
     commands: Iterable[Sequence[str]] | None = None,
     runner: Callable[[Sequence[str], Path], None] = run_command,
+    ensure_build: bool = True,
 ) -> None:
     """Execute the packaging pipeline with cleanup between steps."""
+
+    if ensure_build:
+        ensure_build_tool(root, runner=runner)
 
     sequence: Iterable[Sequence[str]] = commands or COMMAND_SEQUENCE
     for index, command in enumerate(sequence):
