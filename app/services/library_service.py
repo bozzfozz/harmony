@@ -9,6 +9,7 @@ from difflib import SequenceMatcher
 import hashlib
 import json
 
+from app.schemas.common import ID
 from app.schemas.errors import ApiError, ErrorCode
 from app.schemas.provider import ProviderAlbum, ProviderArtist, ProviderTrack
 from app.services.errors import ServiceError
@@ -187,9 +188,10 @@ class LibraryService:
         digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
         return digest
 
-    def get_album(self, album_id: int) -> ProviderAlbum | None:
+    def get_album(self, album_id: str | ID) -> ProviderAlbum | None:
+        album_id_str = str(album_id)
         for entry in self._albums:
-            if entry.album.id == album_id:
+            if entry.album.id is not None and str(entry.album.id) == album_id_str:
                 return entry.album
         return None
 
