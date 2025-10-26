@@ -6,6 +6,7 @@ __pycache__/
 .DS_Store
 *.db
 data/*.db
+volumes/
 dist/
 build/
 coverage*/

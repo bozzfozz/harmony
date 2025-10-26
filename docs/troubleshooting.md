@@ -14,6 +14,7 @@ self-check CLI (`python -m app.ops.selfcheck --assert-startup`) and the health e
 | OAuth flow fails with `OAUTH_STATE_MISMATCH` | Redirect URL changed or state expired. | Restart the flow from the UI or API; avoid opening multiple tabs. |
 | Spotify callback shows `ERR_CONNECTION_REFUSED` | Browser cannot reach `127.0.0.1:8888`. | Replace the host with the actual server IP or tunnel the port (`ssh -N -L 8888:127.0.0.1:8888 ...`). |
 | Music files missing after restart | Volumes not mounted persistently. | Mount `/downloads` and `/music` to host directories. Verify container logs for mount warnings. |
+| `Unable to create downloads directory` in container logs | Host directory mapped to `/downloads` missing or lacking write permissions for the container user. | Run `python -m scripts.preflight_volume_check` (or recreate the directory) and ensure ownership matches `PUID`/`PGID` (`sudo chown 1000:1000 <path>` by default). Restart the container afterwards. |
 | `OAUTH_SPLIT_MODE=true` fails at startup | Missing shared state directory or wrong permissions. | Mount the same host directory to `/data/runtime/oauth_state` for both API and callback services. Ensure ownership matches `PUID`/`PGID`. |
 | Browser client fails with CORS errors | `ALLOWED_ORIGINS` not aligned with the browser URL. | Set the variable to the public URL (e.g. `http://localhost:8080`). |
 | Ready probe stuck on `dependency: spotify` | Spotify API unreachable or credentials invalid. | Check connectivity, rotate Spotify secrets, rerun the OAuth flow. |

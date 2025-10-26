@@ -9,9 +9,23 @@ maintains `harmony.db` inside the `/data` volume.
 - Docker 20.10 or newer.
 - Spotify and Soulseek credentials (if you intend to enable HDM PRO flows).
 - Host directories for persistent storage:
+  - `/config` – holds the generated `harmony.yml` and (optionally) backups.
   - `/downloads` – temporary workspace for HDM downloads.
   - `/music` – final library location managed by HDM.
   - Optional: `/data/runtime/oauth_state` when using the OAuth split mode.
+
+Prepare the directories and align their ownership with the container user
+before starting Harmony:
+
+```bash
+python -m scripts.preflight_volume_check
+```
+
+The preflight script creates `volumes/config`, `volumes/data`,
+`volumes/downloads`, and `volumes/music` relative to the repository. Override
+`--config-dir`, `--data-dir`, `--downloads-dir`, or `--music-dir` to point at
+different host paths. Use `--puid/--pgid` when you want to pre-provision the
+directories for another UID/GID combination.
 
 ## Quickstart (`docker run`)
 
@@ -19,17 +33,26 @@ maintains `harmony.db` inside the `/data` volume.
 docker run -d \
   --name harmony \
   -p 8080:8080 \
-  -v $(pwd)/data:/data \
-  -v $(pwd)/data/downloads:/downloads \
-  -v $(pwd)/data/music:/music \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -e HARMONY_CONFIG_FILE=/config/harmony.yml \
+  -e DOWNLOADS_DIR=/downloads \
+  -e MUSIC_DIR=/music \
+  -v $(pwd)/volumes/config:/config \
+  -v $(pwd)/volumes/data:/data \
+  -v $(pwd)/volumes/downloads:/downloads \
+  -v $(pwd)/volumes/music:/music \
   ghcr.io/bozzfozz/harmony:1.0.0
 ```
 
 - Mount `/data` to persist the SQLite database (`harmony.db`) and generated
-  configuration (`harmony.yml`). Replace `$(pwd)/data` with the host directory
-  that should hold these files.
-- Mount `/downloads` and `/music` to persist downloads and the organised library.
-- Harmony creates missing directories on start-up.
+  configuration (`harmony.yml`). Replace `$(pwd)/volumes/data` with the host
+  directory that should hold these files.
+- Mount `/downloads` and `/music` to persist downloads and the organised
+  library.
+- Mount `/config` to keep configuration assets separate from application data.
+- `scripts/preflight_volume_check.py` ensures the directories exist and are
+  writable for the configured `PUID`/`PGID`.
 - Optional security hardening:
   - `HARMONY_API_KEYS` enables API key authentication (comma-separated list).
   - `ALLOWED_ORIGINS` restricts CORS; defaults to `*` when unset.
@@ -57,6 +80,13 @@ will reuse the copied files on the next boot.
 
 ## Using docker compose
 
+Run the preflight step once (or after changing the volume locations) to provision
+the directories:
+
+```bash
+python -m scripts.preflight_volume_check
+```
+
 [`compose.yaml`](../../compose.yaml) is the canonical docker compose definition:
 
 ```yaml
@@ -68,10 +98,14 @@ services:
       TZ: Etc/UTC
       PUID: "1000"
       PGID: "1000"
+      HARMONY_CONFIG_FILE: /config/harmony.yml
+      DOWNLOADS_DIR: /downloads
+      MUSIC_DIR: /music
     volumes:
-      - /mnt/harmony:/data
-      - /mnt/data/downloads:/downloads
-      - /mnt/data/music:/music
+      - ./volumes/config:/config
+      - ./volumes/data:/data
+      - ./volumes/downloads:/downloads
+      - ./volumes/music:/music
     ports:
       - "8080:8080"
     healthcheck:
@@ -83,8 +117,9 @@ services:
     restart: unless-stopped
 ```
 
-The host paths under `/mnt/...` are only examples—point them at your persistent
-storage and library directories. Harmony boots without additional environment
+The host paths above assume you run `docker compose` from the repository root.
+Adjust them when the host directories live elsewhere (use absolute paths for
+remote disks). Harmony boots without additional environment
 variables, leaving API keys disabled by default. Keep the compose stack on a
 trusted network or set `HARMONY_API_KEYS` in a `.env` file (or inline) before
 publishing the service. The generated `/data/harmony.yml` contains every tunable
@@ -98,7 +133,7 @@ The published release identifier comes from [`app/version.py`](../../app/version
 and is exposed via the `/live` probe. Pin your deployments to `1.0.0` (or the
 current constant) instead of `latest` to ensure reproducible upgrades.
 
-Bring the stack up with:
+Bring the stack up after the preflight succeeded:
 
 ```bash
 docker compose up -d

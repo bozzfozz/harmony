@@ -12,9 +12,9 @@
 - SQLite database artefacts never appear, implying bootstrap aborted before `ensure_sqlite_database()` finished or the directory is read-only.
 
 ## Root-Cause Hypotheses
-1. **Missing bind-mounts for runtime directories**  
+1. **Missing bind-mounts for runtime directories**
    - Entry point enforces the existence, ownership and rw-access for `/downloads` & `/music` (or overrides). Failure raises `BootstrapError`, terminating the container.【F:app/runtime/container_entrypoint.py†L210-L320】
-   - Smoke environment lacks `/data/downloads` and `/data/music` mounts, so `/downloads` maps to a non-existent path → bootstrap aborts.
+   - Smoke environment lacks `/downloads` and `/music` mounts, so the paths resolve to the container filesystem → bootstrap aborts when it cannot create them.
 2. **Health probe hitting legacy path**  
    - Container exposes `/api/health/live` as the canonical liveness path; `/live` is configurable but defaults to the legacy stub for backwards compatibility.【F:app/runtime/container_entrypoint.py†L340-L404】
    - Smoke test polls `/live`, which responds 404/connection reset even on success, masking real readiness.
@@ -22,17 +22,27 @@
    - When no `DATABASE_URL` is provided, Harmony stores `harmony.db` beside the app bundle; read-only mounts or volume misconfiguration prevent file creation, triggering a `BootstrapError`.【F:app/runtime/container_entrypoint.py†L269-L314】
 
 ## Diagnosis Workflow
-1. **Provision writable volumes**  
+1. **Provision writable volumes**
    ```bash
    TMP=$(mktemp -d)
-   mkdir -p "$TMP/config" "$TMP/downloads" "$TMP/music"
+   python -m scripts.preflight_volume_check \
+     --config-dir "$TMP/config" \
+     --data-dir "$TMP/data" \
+     --downloads-dir "$TMP/downloads" \
+     --music-dir "$TMP/music"
    ```
-2. **Run container with mounts**  
+2. **Run container with mounts**
    ```bash
    docker run --rm -d --name harmony \
      -e APP_PORT=8080 \
+     -e PUID=1000 \
+     -e PGID=1000 \
+     -e HARMONY_CONFIG_FILE=/config/harmony.yml \
+     -e DOWNLOADS_DIR=/downloads \
+     -e MUSIC_DIR=/music \
      -p 8080:8080 \
      -v "$TMP/config":/config \
+     -v "$TMP/data":/data \
      -v "$TMP/downloads":/downloads \
      -v "$TMP/music":/music \
      ghcr.io/bozzfozz/harmony:latest
@@ -47,9 +57,9 @@
    curl -fsS http://127.0.0.1:8080/api/health/live
    curl -fsS http://127.0.0.1:8080/api/health/ready?verbose=1
    ```
-5. **Validate database artefact**  
+5. **Validate database artefact**
    ```bash
-   ls -l "$TMP/config" "$TMP"/harmony.db
+   ls -l "$TMP/config" "$TMP/data"/harmony.db
    ```
    - If SQLite path differs (custom `DATABASE_URL`), verify parent directory permissions align with `PUID/PGID`.
 
