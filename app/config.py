@@ -2131,6 +2131,13 @@ def _default_database_url_for_profile(profile: str) -> str:
     return DEFAULT_DB_URL_DEV
 
 
+def resolve_default_database_url(env: Mapping[str, Any]) -> str:
+    """Return the default SQLite connection string for the given environment."""
+
+    profile, _flags = _resolve_environment_profile(env)
+    return _default_database_url_for_profile(profile)
+
+
 def _resolve_database_url(env: Mapping[str, Any], explicit: str | None) -> str:
     profile, _flags = _resolve_environment_profile(env)
     default_url = _default_database_url_for_profile(profile)

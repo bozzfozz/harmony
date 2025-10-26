@@ -11,7 +11,12 @@ import sys
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
-from app.config import DEFAULT_DOWNLOADS_DIR, DEFAULT_MUSIC_DIR, resolve_app_port
+from app.config import (
+    DEFAULT_DOWNLOADS_DIR,
+    DEFAULT_MUSIC_DIR,
+    resolve_app_port,
+    resolve_default_database_url,
+)
 
 APP_HOST = "0.0.0.0"
 DEFAULT_APP_MODULE = "app.main:app"
@@ -269,7 +274,7 @@ def ensure_sqlite_database(url: str) -> None:
 def ensure_database_url(env: MutableMapping[str, str]) -> str:
     database_url = env.get("DATABASE_URL")
     if not database_url:
-        database_url = "sqlite+aiosqlite:///data/harmony.db"
+        database_url = resolve_default_database_url(env)
         env["DATABASE_URL"] = database_url
         log_info("entrypoint", f"DATABASE_URL not provided; using {database_url}.")
     else:

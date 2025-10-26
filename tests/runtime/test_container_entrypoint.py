@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from app.config import DEFAULT_DB_URL_PROD, DEFAULT_DB_URL_TEST
 from app.runtime import container_entrypoint
 
 
@@ -117,12 +118,35 @@ def test_bootstrap_environment_sets_defaults(
         "MUSIC_DIR": str(music),
         "PUID": str(os.getuid()),
         "PGID": str(os.getgid()),
+        "PYTEST_CURRENT_TEST": "tests::bootstrap",
     }
     state = container_entrypoint.bootstrap_environment(env)
     assert state.target_uid == os.getuid()
     assert env["DATABASE_URL"].startswith("sqlite+aiosqlite")
     assert downloads.exists()
     assert music.exists()
+
+
+def test_ensure_database_url_uses_profile_default() -> None:
+    env: dict[str, str] = {"APP_ENV": "prod"}
+    result = container_entrypoint.ensure_database_url(env)
+    assert result == DEFAULT_DB_URL_PROD
+    assert env["DATABASE_URL"] == DEFAULT_DB_URL_PROD
+
+
+def test_ensure_database_url_honours_pytest_flag() -> None:
+    env: dict[str, str] = {"PYTEST_CURRENT_TEST": "tests::ensure"}
+    result = container_entrypoint.ensure_database_url(env)
+    assert result == DEFAULT_DB_URL_TEST
+    assert env["DATABASE_URL"] == DEFAULT_DB_URL_TEST
+
+
+def test_ensure_database_url_preserves_existing_value() -> None:
+    custom = "sqlite+aiosqlite:///custom.db"
+    env: dict[str, str] = {"DATABASE_URL": custom, "APP_ENV": "dev"}
+    result = container_entrypoint.ensure_database_url(env)
+    assert result == custom
+    assert env["DATABASE_URL"] == custom
 
 
 def test_drop_privileges_rejects_without_permission(monkeypatch: pytest.MonkeyPatch) -> None:
