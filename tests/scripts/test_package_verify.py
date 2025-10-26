@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -32,9 +32,7 @@ def test_run_pipeline_cleans_between_steps(tmp_path: Path, monkeypatch: pytest.M
         if len(observed) < len(commands):
             _create_artifacts(root)
 
-    package_verify.run_pipeline(
-        tmp_path, commands=commands, runner=runner, ensure_build=False
-    )
+    package_verify.run_pipeline(tmp_path, commands=commands, runner=runner, ensure_build=False)
 
     assert observed == list(commands)
 

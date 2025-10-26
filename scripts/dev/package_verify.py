@@ -4,8 +4,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-import importlib.util
 from datetime import UTC, datetime
+import importlib.util
 import json
 from pathlib import Path
 import shutil
