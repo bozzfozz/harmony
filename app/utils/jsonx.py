@@ -27,8 +27,8 @@ def safe_dumps(obj: Any) -> str:
 def safe_loads(data: str | bytes | bytearray) -> Any:
     """Parse JSON data strictly, rejecting blank inputs."""
 
-    if isinstance(data, bytes | bytearray):
-        buffer = bytes(data) if isinstance(data, bytearray) else data
+    if isinstance(data, (bytes, bytearray)):
+        buffer: bytes = bytes(data) if isinstance(data, bytearray) else data
         if not buffer.strip():
             raise ValueError("data must not be empty")
         return json.loads(buffer)
