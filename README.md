@@ -169,6 +169,11 @@ pip-audit`, and finishes with the UI smoke test. Ensure the
 `requirements-dev.txt` is installed and that network access is available so the security
 scan can complete without downgrading the gate.
 
+When preparing the LinuxServer.io image, build it with `make image-lsio` and verify the
+runtime with `make smoke-lsio`. The smoke harness boots the freshly built container,
+waits up to 60 seconds for `/api/health/ready`, and confirms that `/config/harmony.db`
+exists. Capture the resulting logs for your release evidence alongside the other gates.
+
 ## Support & policies
 
 - Operations & incidents: see the [HDM runbook](docs/operations/runbooks/hdm.md) and

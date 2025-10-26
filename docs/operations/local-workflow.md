@@ -16,6 +16,8 @@ Harmony verlässt sich weiterhin auf nachvollziehbare lokale Gates. Ergänzend p
 | `make be-verify`          | —                                   | Alias für `make test`; dient als explizites Backend-Gate im `make all`-Lauf. |
 | `make supply-guard`       | `scripts/dev/supply_guard.sh`       | Prüft auf versehentlich eingecheckte Node-Build-Artefakte. |
 | `make smoke`              | `scripts/dev/smoke_unified.sh`      | Startet `uvicorn app.main:app`, pingt bis zu 60 Sekunden `http://127.0.0.1:${APP_PORT}${SMOKE_PATH}` und beendet den Prozess kontrolliert; führt anschließend einen optionalen Readiness-Ping gegen `/api/health/ready?verbose=1` aus (`SMOKE_READY_CHECK=warn` standard, `strict` erzwingt einen Fehler). Optional wird ein vorhandenes Unified-Docker-Image geprüft. |
+| `make image-lsio`         | —                                   | Baut das LinuxServer.io-kompatible Image `ghcr.io/bozzfozz/harmony:lsio` anhand von `docker/Dockerfile.lsio`. |
+| `make smoke-lsio`         | `scripts/dev/smoke_lsio.sh`         | Startet das LSIO-Image in einem temporären Container, wartet bis zu 60 Sekunden auf einen erfolgreichen Healthcheck gegen `http://127.0.0.1:${HARMONY_LSIO_SMOKE_PORT:-18080}/api/health/ready` und prüft anschließend, dass `/config/harmony.db` im Container sowie auf dem gemounteten Host-Pfad existiert. |
 | `make all`                | —                                   | Kombiniert `fmt lint dep-sync be-verify supply-guard smoke` in fester Reihenfolge (der `lint`-Schritt umfasst Ruff und MyPy). |
 | `make release-check`      | —                                   | Führt `make all`, anschließend `make docs-verify`, `make pip-audit` und `make ui-smoke` aus; dient als finales Release-Gate. |
 
