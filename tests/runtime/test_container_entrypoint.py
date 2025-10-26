@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -59,10 +60,53 @@ def test_ensure_sqlite_database_creates_file(tmp_path: Path) -> None:
     assert db_path.exists()
 
 
+def test_ensure_sqlite_database_logs_ready(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = (tmp_path / "data" / "harmony.db").resolve()
+    url = f"sqlite+aiosqlite:///{db_path}"  # absolute path ensures direct resolution
+    container_entrypoint.ensure_sqlite_database(url)
+    captured = capsys.readouterr()
+    ready_line = next(
+        line for line in captured.out.splitlines() if "sqlite.bootstrap.ready" in line
+    )
+    payload = json.loads(ready_line.split(" ", 1)[1])
+    assert payload["event"] == "sqlite.bootstrap.ready"
+    assert payload["database_path"] == str(db_path)
+
+
 @pytest.mark.parametrize("url", ["postgresql://localhost/db"])
 def test_ensure_sqlite_database_invalid(url: str) -> None:
     with pytest.raises(container_entrypoint.BootstrapError):
         container_entrypoint.ensure_sqlite_database(url)
+
+
+def test_ensure_sqlite_database_permission_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db_path = (tmp_path / "data" / "harmony.db").resolve()
+    url = f"sqlite+aiosqlite:///{db_path}"
+    parent = db_path.parent
+
+    original_access = container_entrypoint.os.access
+
+    def fake_access(path: os.PathLike[str] | str, mode: int) -> bool:  # type: ignore[override]
+        if Path(path).resolve() == parent and mode == os.W_OK | os.X_OK:
+            return False
+        return original_access(path, mode)
+
+    monkeypatch.setattr(container_entrypoint.os, "access", fake_access)
+
+    with pytest.raises(container_entrypoint.BootstrapError):
+        container_entrypoint.ensure_sqlite_database(url)
+
+    captured = capsys.readouterr()
+    error_line = next(
+        line for line in captured.err.splitlines() if "sqlite.bootstrap.parent_not_writable" in line
+    )
+    payload = json.loads(error_line.split(" ", 1)[1])
+    assert payload["event"] == "sqlite.bootstrap.parent_not_writable"
+    assert payload["parent"] == str(parent)
 
 
 def test_combine_extra_args_removes_prefixed_invocation() -> None:

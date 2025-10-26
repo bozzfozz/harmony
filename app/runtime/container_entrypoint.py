@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, MutableMapping, Sequence
+import json
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -64,6 +65,30 @@ def log_failure(
     if meta:
         suffix = " " + ", ".join(meta)
     print(f"[{prefix}] {error}{suffix}", file=sys.stderr, flush=True)
+
+
+def _normalise_payload(payload: Mapping[str, object]) -> dict[str, object]:
+    normalised: dict[str, object] = {}
+    for key, value in payload.items():
+        if isinstance(value, Path):
+            normalised[key] = str(value)
+        else:
+            normalised[key] = value
+    return normalised
+
+
+def log_event(
+    prefix: str,
+    event: str,
+    *,
+    level: str = "info",
+    payload: Mapping[str, object] | None = None,
+) -> None:
+    message = {"event": event}
+    if payload:
+        message.update(_normalise_payload(payload))
+    stream = sys.stdout if level == "info" else sys.stderr
+    print(f"[{prefix}] {json.dumps(message, sort_keys=True)}", file=stream, flush=True)
 
 
 def _format_umask(value: int) -> str:
@@ -219,56 +244,121 @@ def ensure_directory(
 
 
 def ensure_sqlite_database(url: str) -> None:
-    log_info("startup", "starting sqlite bootstrap")
+    log_event("startup", "sqlite.bootstrap.start", payload={"raw_url": url})
     try:
         parsed = make_url(url)
     except (ArgumentError, AttributeError) as exc:
+        log_event(
+            "startup",
+            "sqlite.bootstrap.invalid_url",
+            level="error",
+            payload={"raw_url": url, "error": str(exc)},
+        )
         raise BootstrapError(
             "Invalid DATABASE_URL", details={"value": url, "error": str(exc)}
         ) from exc
     if parsed.drivername not in {"sqlite", "sqlite+aiosqlite", "sqlite+pysqlite"}:
+        log_event(
+            "startup",
+            "sqlite.bootstrap.unsupported_driver",
+            level="error",
+            payload={"driver": parsed.drivername, "raw_url": url},
+        )
         raise BootstrapError(
             "DATABASE_URL must use a sqlite driver (sqlite+aiosqlite:/// or sqlite+pysqlite:///)",
             details={"value": url},
         )
     database_path = parsed.database
     if not database_path or database_path == ":memory:":
+        log_event(
+            "startup",
+            "sqlite.bootstrap.skip_memory",
+            payload={"driver": parsed.drivername},
+        )
         return
     resolved = Path(database_path)
     if not resolved.is_absolute():
         resolved = (Path.cwd() / resolved).resolve()
     parent = resolved.parent
-    log_info("startup", f"ensuring sqlite database path={resolved}")
+    log_event(
+        "startup",
+        "sqlite.bootstrap.path_resolved",
+        payload={"database_path": resolved, "parent": parent},
+    )
     try:
         parent.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
+        log_event(
+            "startup",
+            "sqlite.bootstrap.parent_create_failed",
+            level="error",
+            payload={
+                "parent": parent,
+                "errno": getattr(exc, "errno", None),
+                "error": str(exc),
+            },
+        )
         raise BootstrapError(
             "Unable to create database parent directory",
             details={"path": str(parent), "error": str(exc)},
         ) from exc
     if not parent.is_dir():
+        log_event(
+            "startup",
+            "sqlite.bootstrap.parent_not_dir",
+            level="error",
+            payload={"parent": parent},
+        )
         raise BootstrapError(
             "Database parent path is not a directory", details={"path": str(parent)}
         )
     if not os.access(parent, os.W_OK | os.X_OK):
+        log_event(
+            "startup",
+            "sqlite.bootstrap.parent_not_writable",
+            level="error",
+            payload={"parent": parent, "mode": os.W_OK | os.X_OK},
+        )
         raise BootstrapError(
             "Database parent directory is not writable",
             details={"path": str(parent)},
         )
     try:
         if resolved.exists():
-            log_info("startup", f"found existing sqlite database path={resolved}")
+            log_event(
+                "startup",
+                "sqlite.bootstrap.file_exists",
+                payload={"database_path": resolved},
+            )
             with open(resolved, "ab"):
                 pass
         else:
-            log_info("startup", f"creating sqlite database file path={resolved}")
+            log_event(
+                "startup",
+                "sqlite.bootstrap.create_file",
+                payload={"database_path": resolved},
+            )
             resolved.touch(exist_ok=True)
     except OSError as exc:
+        log_event(
+            "startup",
+            "sqlite.bootstrap.file_access_failed",
+            level="error",
+            payload={
+                "database_path": resolved,
+                "errno": getattr(exc, "errno", None),
+                "error": str(exc),
+            },
+        )
         raise BootstrapError(
             "Unable to create or access sqlite database file",
             details={"path": str(resolved), "error": str(exc)},
         ) from exc
-    log_info("startup", f"sqlite database ready path={resolved}")
+    log_event(
+        "startup",
+        "sqlite.bootstrap.ready",
+        payload={"database_path": resolved},
+    )
 
 
 def ensure_database_url(env: MutableMapping[str, str]) -> str:
