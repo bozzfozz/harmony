@@ -6,6 +6,7 @@ from app.config import (
     DEFAULT_DB_URL_TEST,
     load_config,
     override_runtime_env,
+    resolve_default_database_url,
 )
 from app.errors import ValidationAppError
 
@@ -39,3 +40,22 @@ def test_database_url_rejects_non_sqlite(monkeypatch):
     override_runtime_env(None)
     with pytest.raises(ValidationAppError):
         load_config()
+
+
+def test_resolve_default_database_url_dev_profile():
+    assert resolve_default_database_url({}) == DEFAULT_DB_URL_DEV
+
+
+def test_resolve_default_database_url_prod_profile():
+    env = {"APP_ENV": "prod"}
+    assert resolve_default_database_url(env) == DEFAULT_DB_URL_PROD
+
+
+def test_resolve_default_database_url_pytest_flag():
+    env = {"PYTEST_CURRENT_TEST": "tests::sample"}
+    assert resolve_default_database_url(env) == DEFAULT_DB_URL_TEST
+
+
+def test_resolve_default_database_url_unknown_value_defaults_to_dev():
+    env = {"APP_ENV": "mystery"}
+    assert resolve_default_database_url(env) == DEFAULT_DB_URL_DEV
