@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from types import SimpleNamespace
 
 import pytest
 
 import scripts.auto_repair.engine as auto_repair_engine
+from scripts.dev import pytest_env
 
 
 def _prepare_env(monkeypatch: pytest.MonkeyPatch, overrides: Mapping[str, str]) -> None:
@@ -48,7 +48,9 @@ class _SilentLogger(auto_repair_engine.ReasonTraceLogger):
         return
 
 
-def _make_context(stderr: str) -> auto_repair_engine.RepairContext:
+def _make_context(
+    stderr: str, env: Mapping[str, str] | None = None
+) -> auto_repair_engine.RepairContext:
     command = auto_repair_engine.RepairCommand(name="pytest", argv=["pytest"])
     stage = auto_repair_engine.RepairStage(name="test", commands=(command,))
     result = auto_repair_engine.CommandResult(returncode=2, stdout="", stderr=stderr)
@@ -58,24 +60,26 @@ def _make_context(stderr: str) -> auto_repair_engine.RepairContext:
         attempt=1,
         result=result,
         combined_output=f"\n{stderr}",
-        env={},
+        env=dict(env or {}),
     )
 
 
 def test_pytest_cov_fixer_installs_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        auto_repair_engine, "_resolve_pytest_cov_requirement", lambda: "pytest-cov==4.1.0"
-    )
-    recorded: dict[str, list[str]] = {}
+    captured: dict[str, object] = {}
 
-    def _patched_run(command, **_: object) -> SimpleNamespace:  # type: ignore[override]
-        recorded["command"] = command
-        return SimpleNamespace(returncode=0, stdout="installed", stderr="")
+    def _patched_ensure(addopts: str | None = None) -> pytest_env.PytestCovSetupResult:
+        captured["addopts"] = addopts
+        return pytest_env.PytestCovSetupResult(
+            required=True,
+            installed=True,
+            command=("pip", "install", "pytest-cov==4.1.0"),
+            message="Installed pytest-cov",
+        )
 
-    monkeypatch.setattr(auto_repair_engine.subprocess, "run", _patched_run)
+    monkeypatch.setattr(auto_repair_engine.pytest_env, "ensure_pytest_cov", _patched_ensure)
 
     stderr = "pytest: error: unrecognized arguments: --cov=app"
-    context = _make_context(stderr)
+    context = _make_context(stderr, {"PYTEST_ADDOPTS": "--cov=app"})
     fixer = auto_repair_engine.PytestCovFixer()
     assert fixer.matches(context)
 
@@ -83,19 +87,22 @@ def test_pytest_cov_fixer_installs_plugin(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert outcome.success is True
     assert outcome.commands == ["pip install pytest-cov==4.1.0"]
-    assert recorded["command"] == ["pip", "install", "pytest-cov==4.1.0"]
+    assert captured["addopts"] == "--cov=app"
 
 
 def test_pytest_cov_fixer_reports_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(auto_repair_engine, "_resolve_pytest_cov_requirement", lambda: "pytest-cov")
+    def _patched_ensure(addopts: str | None = None) -> pytest_env.PytestCovSetupResult:
+        return pytest_env.PytestCovSetupResult(
+            required=True,
+            installed=False,
+            command=("pip", "install", "pytest-cov"),
+            message="error: network down",
+        )
 
-    def _failing_run(command, **_: object) -> SimpleNamespace:  # type: ignore[override]
-        return SimpleNamespace(returncode=1, stdout="", stderr="error: network down")
-
-    monkeypatch.setattr(auto_repair_engine.subprocess, "run", _failing_run)
+    monkeypatch.setattr(auto_repair_engine.pytest_env, "ensure_pytest_cov", _patched_ensure)
 
     stderr = "pytest: error: unrecognized arguments: --cov-report=term"
-    context = _make_context(stderr)
+    context = _make_context(stderr, {"PYTEST_ADDOPTS": "--cov-report=term"})
     fixer = auto_repair_engine.PytestCovFixer()
     assert fixer.matches(context)
 
@@ -105,3 +112,29 @@ def test_pytest_cov_fixer_reports_failure(monkeypatch: pytest.MonkeyPatch) -> No
     assert outcome.commands == ["pip install pytest-cov"]
     assert "error: network down" in outcome.message
     assert outcome.warnings
+
+
+def test_engine_aborts_when_pytest_cov_setup_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    stage = auto_repair_engine.RepairStage(
+        name="test",
+        commands=(),
+    )
+    engine = auto_repair_engine.AutoRepairEngine(
+        stages={"test": stage},
+        fixers=(),
+        max_iters=1,
+        logger=_SilentLogger(),
+    )
+
+    failure = pytest_env.PytestCovSetupResult(
+        required=True,
+        installed=False,
+        command=("pip", "install", "pytest-cov"),
+        message="network down",
+    )
+
+    monkeypatch.setattr(auto_repair_engine.pytest_env, "ensure_pytest_cov", lambda _: failure)
+
+    exit_code = engine.run("test")
+
+    assert exit_code == 1
