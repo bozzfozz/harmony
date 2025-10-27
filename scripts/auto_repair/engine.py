@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+import functools
 import os
 from pathlib import Path
 import shutil
@@ -241,9 +242,92 @@ class RuffAutoFixer(Fixer):
         )
 
 
+@functools.lru_cache(maxsize=1)
+def _resolve_pytest_cov_requirement() -> str:
+    """Return the pinned pytest-cov requirement string."""
+
+    requirement_file = REPO_ROOT / "requirements-test.txt"
+    if not requirement_file.exists():
+        return "pytest-cov"
+
+    for raw_line in requirement_file.read_text(encoding="utf-8").splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        token, *_ = stripped.split()
+        if token.startswith("pytest-cov"):
+            return token
+
+    return "pytest-cov"
+
+
+class PytestCovFixer(Fixer):
+    issue_id = "python.test.pytest_cov"
+    description = "Install pytest-cov plugin when coverage options are supplied"
+
+    def matches(self, context: RepairContext) -> bool:
+        output = context.combined_output.lower()
+        if "unrecognized arguments" not in output:
+            return False
+        return "--cov" in output or "--cov-report" in output
+
+    def apply(self, context: RepairContext, logger: ReasonTraceLogger) -> FixOutcome:
+        logger.emit(
+            step="DECIDE",
+            why="pytest coverage flags require pytest-cov plugin",
+            command=context.command.name,
+            nxt="FIX",
+        )
+
+        requirement = _resolve_pytest_cov_requirement()
+        command = ["pip", "install", requirement]
+        display = " ".join(command)
+        completed = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        logger.emit(
+            step="FIX",
+            why="Installing pytest-cov dependency",
+            command=display,
+            result=f"exit={completed.returncode}",
+            nxt="VERIFY" if completed.returncode == 0 else "DONE",
+        )
+
+        success = completed.returncode == 0
+        if success:
+            logger.emit(
+                step="VERIFY",
+                why="pytest-cov installation completed",
+                command=display,
+                result="OK",
+                nxt="RE-RUN",
+            )
+
+        combined = (completed.stdout or "") + "\n" + (completed.stderr or "")
+        message = (
+            "Installed pytest-cov"
+            if success
+            else textwrap.shorten(combined.strip() or "pip install pytest-cov failed", width=240)
+        )
+        warnings = [] if success else ["Install pytest-cov manually and re-run tests"]
+        return FixOutcome(
+            issue_id=self.issue_id,
+            description=self.description,
+            success=success,
+            message=message,
+            commands=[display],
+            warnings=warnings,
+        )
+
+
 ALL_FIXERS: Sequence[Fixer] = (
     RuffAutoFixer(),
     PipHashFixer(),
+    PytestCovFixer(),
 )
 
 
