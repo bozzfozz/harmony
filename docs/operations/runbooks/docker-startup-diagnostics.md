@@ -27,7 +27,6 @@
    TMP=$(mktemp -d)
    python -m scripts.preflight_volume_check \
      --config-dir "$TMP/config" \
-     --data-dir "$TMP/data" \
      --downloads-dir "$TMP/downloads" \
      --music-dir "$TMP/music"
    ```
@@ -40,12 +39,11 @@
      -e HARMONY_CONFIG_FILE=/config/harmony.yml \
      -e DOWNLOADS_DIR=/downloads \
      -e MUSIC_DIR=/music \
-     -p 8080:8080 \
-     -v "$TMP/config":/config \
-     -v "$TMP/data":/data \
-     -v "$TMP/downloads":/downloads \
-     -v "$TMP/music":/music \
-     ghcr.io/bozzfozz/harmony:latest
+      -p 8080:8080 \
+      -v "$TMP/config":/config \
+      -v "$TMP/downloads":/downloads \
+      -v "$TMP/music":/music \
+      ghcr.io/bozzfozz/harmony:latest
    ```
 3. **Stream logs immediately**  
    ```bash
@@ -59,7 +57,7 @@
    ```
 5. **Validate database artefact**
    ```bash
-   ls -l "$TMP/config"/harmony.db "$TMP/data"
+   ls -l "$TMP/config"/harmony.db "$TMP/config"/harmony.yml
    ```
    - If SQLite path differs (custom `DATABASE_URL`), verify parent directory permissions align with `PUID/PGID`.
 

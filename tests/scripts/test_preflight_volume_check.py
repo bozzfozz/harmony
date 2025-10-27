@@ -10,20 +10,18 @@ from scripts import preflight_volume_check as pvc
 
 def test_ensure_directories_creates_and_sets_permissions(tmp_path: Path) -> None:
     config_dir = tmp_path / "config"
-    data_dir = tmp_path / "data"
     downloads_dir = tmp_path / "downloads"
     music_dir = tmp_path / "music"
 
     pvc.ensure_directories(
         config_dir=config_dir,
-        data_dir=data_dir,
         downloads_dir=downloads_dir,
         music_dir=music_dir,
         puid=1234,
         pgid=4321,
     )
 
-    for directory in (config_dir, data_dir, downloads_dir, music_dir):
+    for directory in (config_dir, downloads_dir, music_dir):
         assert directory.is_dir()
         metadata = directory.stat()
         assert metadata.st_uid == 1234
@@ -34,7 +32,6 @@ def test_ensure_directories_raises_when_directory_creation_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_dir = tmp_path / "config"
-    data_dir = tmp_path / "data"
     downloads_dir = tmp_path / "downloads"
     music_dir = tmp_path / "music"
 
@@ -50,7 +47,6 @@ def test_ensure_directories_raises_when_directory_creation_fails(
     with pytest.raises(pvc.PreflightError) as excinfo:
         pvc.ensure_directories(
             config_dir=config_dir,
-            data_dir=data_dir,
             downloads_dir=downloads_dir,
             music_dir=music_dir,
             puid=1000,
@@ -64,13 +60,11 @@ def test_ensure_directories_validates_writability(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     config_dir = tmp_path / "config"
-    data_dir = tmp_path / "data"
     downloads_dir = tmp_path / "downloads"
     music_dir = tmp_path / "music"
 
     pvc.ensure_directories(
         config_dir=config_dir,
-        data_dir=data_dir,
         downloads_dir=downloads_dir,
         music_dir=music_dir,
         puid=1000,
@@ -83,7 +77,6 @@ def test_ensure_directories_validates_writability(
     with pytest.raises(pvc.PreflightError) as excinfo:
         pvc.ensure_directories(
             config_dir=config_dir,
-            data_dir=data_dir,
             downloads_dir=downloads_dir,
             music_dir=music_dir,
             puid=1000,

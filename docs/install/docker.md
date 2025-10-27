@@ -9,8 +9,8 @@ maintains `harmony.db` inside the `/config` volume.
 - Docker 20.10 or newer.
 - Spotify and Soulseek credentials (if you intend to enable HDM PRO flows).
 - Host directories for persistent storage:
-  - `/config` – stores the SQLite database (`harmony.db`) and (optionally) backups.
-  - `/data` – receives the generated `harmony.yml` configuration file.
+  - `/config` – stores the SQLite database (`harmony.db`) and the generated
+    `harmony.yml` configuration file (plus optional backups).
   - `/downloads` – temporary workspace for HDM downloads.
   - `/music` – final library location managed by HDM.
   - Optional: `/config/runtime/oauth_state` when using the OAuth split mode.
@@ -22,11 +22,11 @@ before starting Harmony:
 python -m scripts.preflight_volume_check
 ```
 
-The preflight script creates `volumes/config`, `volumes/data`,
-`volumes/downloads`, and `volumes/music` relative to the repository. Override
-`--config-dir`, `--data-dir`, `--downloads-dir`, or `--music-dir` to point at
-different host paths. Use `--puid/--pgid` when you want to pre-provision the
-directories for another UID/GID combination.
+The preflight script creates `volumes/config`, `volumes/downloads`, and
+`volumes/music` relative to the repository. Override `--config-dir`,
+`--downloads-dir`, or `--music-dir` to point at different host paths. Use
+`--puid/--pgid` when you want to pre-provision the directories for another
+UID/GID combination.
 
 ## Quickstart (`docker run`)
 
@@ -36,23 +36,20 @@ docker run -d \
   -p 8080:8080 \
   -e PUID=1000 \
   -e PGID=1000 \
-  -e HARMONY_CONFIG_FILE=/config/harmony.yml \
-  -e DOWNLOADS_DIR=/downloads \
-  -e MUSIC_DIR=/music \
+  -e TZ=Etc/UTC \
   -v $(pwd)/volumes/config:/config \
-  -v $(pwd)/volumes/data:/data \
   -v $(pwd)/volumes/downloads:/downloads \
   -v $(pwd)/volumes/music:/music \
-  ghcr.io/bozzfozz/harmony:1.0.0
+  ghcr.io/bozzfozz/harmony:lsio
 ```
 
 - Mount `/config` to persist the SQLite database (`harmony.db`). Replace
   `$(pwd)/volumes/config` with the host directory that should hold the database.
-- Mount `/data` to persist the generated configuration (`harmony.yml`). Replace
-  `$(pwd)/volumes/data` with the host directory that should hold the file.
 - Mount `/downloads` and `/music` to persist downloads and the organised
   library.
-- Mount `/config` to keep configuration assets separate from application data.
+- The generated configuration file (`harmony.yml`) resides in the same `/config`
+  volume. Replace `$(pwd)/volumes/config` with the host directory that should
+  hold the file.
 - `scripts/preflight_volume_check.py` ensures the directories exist and are
   writable for the configured `PUID`/`PGID`.
 - Optional security hardening:
@@ -60,7 +57,7 @@ docker run -d \
   - `ALLOWED_ORIGINS` restricts CORS; defaults to `*` when unset.
   - Provide them via `-e ...` flags or a `.env` file when exposing Harmony
     beyond trusted networks.
-- The first boot writes `/data/harmony.yml` with every supported configuration
+- The first boot writes `/config/harmony.yml` with every supported configuration
   toggle. Update the YAML to persist overrides; environment variables still win
   when both sources specify a value.
 
@@ -74,11 +71,12 @@ curl -fsS http://127.0.0.1:8080/api/health/ready?verbose=1
 Both commands must return HTTP 200. The ready endpoint prints dependency details when
 `verbose=1` is supplied.
 
-To retrofit the `/config` and `/data` mounts on an existing container, create
-the persistent host directories, copy `harmony.db` and `harmony.yml` out of the
-container (`docker cp harmony:/config/harmony.db ./config/ && docker cp
-harmony:/data/harmony.yml ./data/`), stop the container, and restart it with the
-extra `-v ...:/config` and `-v ...:/data` flags. Harmony will reuse the copied
+To retrofit the `/config`, `/downloads`, and `/music` mounts on an existing
+container, create the persistent host directories, copy `harmony.db` and
+`harmony.yml` out of the container (`docker cp harmony:/config/harmony.db
+./config/ && docker cp harmony:/config/harmony.yml ./config/`), stop the
+container, and restart it with the additional `-v ...:/config`,
+`-v ...:/downloads`, and `-v ...:/music` flags. Harmony will reuse the copied
 files on the next boot.
 
 ## Using docker compose
@@ -95,20 +93,18 @@ python -m scripts.preflight_volume_check
 ```yaml
 services:
   harmony:
-    image: ghcr.io/bozzfozz/harmony:1.0.0
+    image: ghcr.io/bozzfozz/harmony:lsio
     container_name: harmony
     environment:
-      TZ: Etc/UTC
-      PUID: "1000"
-      PGID: "1000"
-      HARMONY_CONFIG_FILE: /config/harmony.yml
-      DOWNLOADS_DIR: /downloads
-      MUSIC_DIR: /music
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      # - UMASK=022
+      # - SQLALCHEMY_DATABASE_URL=sqlite:////config/harmony.db
     volumes:
-      - ./volumes/config:/config
-      - ./volumes/data:/data
-      - ./volumes/downloads:/downloads
-      - ./volumes/music:/music
+      - ./config:/config
+      - ./downloads:/downloads
+      - ./music:/music
     ports:
       - "8080:8080"
     healthcheck:
@@ -122,15 +118,15 @@ services:
 
 The host paths above assume you run `docker compose` from the repository root.
 Adjust them when the host directories live elsewhere (use absolute paths for
-remote disks). Harmony boots without additional environment
-variables, leaving API keys disabled by default. Keep the compose stack on a
-trusted network or set `HARMONY_API_KEYS` in a `.env` file (or inline) before
-publishing the service. The generated `/data/harmony.yml` contains every tunable
-value; edit it to adjust defaults and commit the file to source control if
-desired. Supply `ALLOWED_ORIGINS` alongside the keys when you want to tighten
-security. Add further overrides as needed (for example,
-`OAUTH_SPLIT_MODE=true` plus a `/config/runtime/oauth_state` mount when running OAuth
-flows across multiple containers).
+remote disks). Harmony boots without additional environment variables, leaving
+API keys disabled by default. Keep the compose stack on a trusted network or set
+`HARMONY_API_KEYS` in a `.env` file (or inline) before publishing the service.
+The generated `/config/harmony.yml` contains every tunable value; edit it to
+adjust defaults and commit the file to source control if desired. Supply
+`ALLOWED_ORIGINS` alongside the keys when you want to tighten security. Add
+further overrides as needed (for example, `OAUTH_SPLIT_MODE=true` plus a
+`/config/runtime/oauth_state` mount when running OAuth flows across multiple
+containers).
 
 The published release identifier comes from [`app/version.py`](../../app/version.py)
 and is exposed via the `/live` probe. Pin your deployments to `1.0.0` (or the

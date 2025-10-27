@@ -1,22 +1,17 @@
 services:
   harmony:
-    image: ghcr.io/bozzfozz/harmony:1.0.0
+    image: ghcr.io/bozzfozz/harmony:lsio
     container_name: harmony
     environment:
-      TZ: Etc/UTC
-      PUID: "1000"
-      PGID: "1000"
-      HARMONY_CONFIG_FILE: /config/harmony.yml
-      DOWNLOADS_DIR: /downloads
-      MUSIC_DIR: /music
-      # Add `HARMONY_API_KEYS` via an `.env` file or here before exposing Harmony to
-      # untrusted networks. The default stack keeps authentication disabled for
-      # local deployments.
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      # - UMASK=022
+      # - SQLALCHEMY_DATABASE_URL=sqlite:////config/harmony.db
     volumes:
-      - ./volumes/config:/config
-      - ./volumes/data:/data
-      - ./volumes/downloads:/downloads
-      - ./volumes/music:/music
+      - ./config:/config
+      - ./downloads:/downloads
+      - ./music:/music
     ports:
       - "8080:8080"
     healthcheck:

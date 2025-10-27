@@ -1,6 +1,6 @@
 # Configuration Reference
 
-Harmony reads configuration from the generated `/data/harmony.yml` file and
+Harmony reads configuration from the generated `/config/harmony.yml` file and
 environment variables with the precedence `environment > .env file > YAML > built-in
 defaults`. The YAML is written on first start and mirrors every variable listed below.
 Secrets (API keys, Spotify credentials) should be injected through the environment or a
