@@ -116,7 +116,7 @@ configuration payloads. They follow the rules below:
 | `OAUTH_SESSION_TTL_MIN` | `10` | `20` | Lifetime of OAuth states (minutes). |
 | `OAUTH_PUBLIC_HOST_HINT` | _(empty)_ | `https://harmony.example.com` | Hint shown in the OAuth UI for remote callbacks. |
 | `OAUTH_SPLIT_MODE` | `false` | `true` | Enables filesystem-based state sharing for split deployments. |
-| `OAUTH_STATE_DIR` | `/data/runtime/oauth_state` | `/data/runtime/oauth_state` | Directory for OAuth state files (must be shared in split mode). |
+| `OAUTH_STATE_DIR` | `/config/runtime/oauth_state` | `/config/runtime/oauth_state` | Directory for OAuth state files (must be shared in split mode). |
 | `OAUTH_STATE_TTL_SEC` | `600` | `900` | TTL of persisted OAuth state files (seconds). |
 | `OAUTH_STORE_HASH_CV` | `true` | `false` | Hash the PKCE code verifier before persisting (must be `false` in split mode). |
 | `OAUTH_PUBLIC_BASE` | `/api/v1/oauth` | `/api/v1/oauth` | Public base path exposed by the API router. |

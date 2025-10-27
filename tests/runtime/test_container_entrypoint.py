@@ -176,6 +176,7 @@ def test_ensure_database_url_uses_profile_default() -> None:
     result = container_entrypoint.ensure_database_url(env)
     assert result == DEFAULT_DB_URL_PROD
     assert env["DATABASE_URL"] == DEFAULT_DB_URL_PROD
+    assert DEFAULT_DB_URL_PROD == "sqlite+aiosqlite:////config/harmony.db"
 
 
 def test_ensure_database_url_honours_pytest_flag() -> None:

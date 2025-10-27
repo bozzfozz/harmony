@@ -68,7 +68,7 @@ remote machine you can complete the flow in two ways:
 | `OAUTH_MANUAL_CALLBACK_ENABLE` | Enable manual completion endpoint. | `true` |
 | `OAUTH_SESSION_TTL_MIN` | OAuth transaction lifetime in minutes. | `10` |
 | `OAUTH_SPLIT_MODE` | Use a shared filesystem store when callback and API run separately. | `false` |
-| `OAUTH_STATE_DIR` | Shared directory for state files. | `/data/runtime/oauth_state` |
+| `OAUTH_STATE_DIR` | Shared directory for state files. | `/config/runtime/oauth_state` |
 | `OAUTH_STATE_TTL_SEC` | TTL of persisted state files. | `600` |
 | `OAUTH_STORE_HASH_CV` | Hash PKCE code verifiers before storing them (set `false` in split mode). | `true` |
 | `OAUTH_PUBLIC_HOST_HINT` | Optional hint displayed to the user (e.g. public hostname). | _(none)_ |

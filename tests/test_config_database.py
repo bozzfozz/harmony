@@ -25,6 +25,7 @@ def test_default_database_url_for_prod(monkeypatch):
     override_runtime_env(None)
     config = load_config()
     assert config.database.url == DEFAULT_DB_URL_PROD
+    assert DEFAULT_DB_URL_PROD == "sqlite+aiosqlite:////config/harmony.db"
 
 
 def test_default_database_url_for_test(monkeypatch):
@@ -49,6 +50,7 @@ def test_resolve_default_database_url_dev_profile():
 def test_resolve_default_database_url_prod_profile():
     env = {"APP_ENV": "prod"}
     assert resolve_default_database_url(env) == DEFAULT_DB_URL_PROD
+    assert DEFAULT_DB_URL_PROD == "sqlite+aiosqlite:////config/harmony.db"
 
 
 def test_resolve_default_database_url_pytest_flag():
