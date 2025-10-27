@@ -47,7 +47,7 @@ class ConfigTemplateSection:
     entries: tuple[ConfigTemplateEntry, ...]
 
 
-DEFAULT_CONFIG_FILE_PATH = Path("/data/harmony.yml")
+DEFAULT_CONFIG_FILE_PATH = Path("/config/harmony.yml")
 
 
 def _load_env_file(path: Path) -> dict[str, str]:
@@ -1332,7 +1332,7 @@ _CONFIG_TEMPLATE_SECTIONS: tuple[ConfigTemplateSection, ...] = (
             ConfigTemplateEntry("ARTWORK_DIR", DEFAULT_ARTWORK_DIR, "Artwork cache directory."),
             ConfigTemplateEntry(
                 "OAUTH_STATE_DIR",
-                "/data/runtime/oauth_state",
+                "/config/runtime/oauth_state",
                 "Directory storing OAuth state files.",
             ),
             ConfigTemplateEntry(
@@ -2742,8 +2742,8 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
     oauth_public_host_hint = (_env_value(env, "OAUTH_PUBLIC_HOST_HINT") or "").strip() or None
     oauth_split_mode = _as_bool(_env_value(env, "OAUTH_SPLIT_MODE"), default=False)
     oauth_state_dir = (
-        _env_value(env, "OAUTH_STATE_DIR") or "/data/runtime/oauth_state"
-    ).strip() or "/data/runtime/oauth_state"
+        _env_value(env, "OAUTH_STATE_DIR") or "/config/runtime/oauth_state"
+    ).strip() or "/config/runtime/oauth_state"
     oauth_state_ttl_seconds = max(
         1,
         _as_int(
