@@ -20,7 +20,8 @@ def run_make_dry(target: str) -> subprocess.CompletedProcess[str]:
 
 def test_make_image_lsio_target_command():
     result = run_make_dry("image-lsio")
-    assert "docker build -f docker/Dockerfile.lsio -t ghcr.io/bozzfozz/harmony:lsio ." in result.stdout
+    expected = "docker build -f docker/Dockerfile.lsio -t lscr.io/linuxserver/harmony:latest ."
+    assert expected in result.stdout
 
 
 def test_make_smoke_lsio_target_invokes_script():

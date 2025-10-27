@@ -40,7 +40,7 @@ docker run -d \
   -v $(pwd)/volumes/config:/config \
   -v $(pwd)/volumes/downloads:/downloads \
   -v $(pwd)/volumes/music:/music \
-  ghcr.io/bozzfozz/harmony:lsio
+  lscr.io/linuxserver/harmony:latest
 ```
 
 - Mount `/config` to persist the SQLite database (`harmony.db`). Replace
@@ -93,7 +93,7 @@ python -m scripts.preflight_volume_check
 ```yaml
 services:
   harmony:
-    image: ghcr.io/bozzfozz/harmony:lsio
+    image: lscr.io/linuxserver/harmony:latest
     container_name: harmony
     environment:
       - PUID=1000

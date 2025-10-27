@@ -1,8 +1,9 @@
-"""Preflight checks for Docker volume directories.
+"""Preflight checks for Harmony's Docker volume directories.
 
-This utility ensures that the host directories used for Harmony's Docker
-volumes exist, are writable for the configured container user, and optionally
-adjusts ownership when executed with elevated privileges.
+The LinuxServer.io container exposes three writable mounts – ``/config``,
+``/downloads`` and ``/music``. This utility ensures that their corresponding
+host directories exist, are writable for the configured container user, and
+optionally adjusts ownership when executed with elevated privileges.
 """
 
 from __future__ import annotations
@@ -109,8 +110,9 @@ def ensure_directories(
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Create Harmony Docker volume directories and verify they are "
-            "writable for the configured container user."
+            "Create /config, /downloads and /music host directories for the "
+            "Harmony container and verify they are writable for the configured "
+            "container user."
         )
     )
     parser.add_argument(
@@ -162,7 +164,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"[error] {exc}", file=sys.stderr)
         return 1
     print(
-        "[ok] Prepared volume directories:\n"
+        "[ok] Prepared LinuxServer.io volume directories:\n"
         f"  /config     ← {args.config_dir.resolve()}\n"
         f"  /downloads ← {downloads_dir.resolve()}\n"
         f"  /music     ← {music_dir.resolve()}"

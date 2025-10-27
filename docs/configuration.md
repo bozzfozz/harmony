@@ -40,7 +40,7 @@ configuration payloads. They follow the rules below:
 | `SMOKE_PATH` | `/api/health/live` | `/api/health/live` | Path used by smoke tests and entrypoint checks. |
 | `DOWNLOADS_DIR` | `/downloads` | `/downloads` | Temporary workspace for HDM downloads; must be writable. |
 | `MUSIC_DIR` | `/music` | `/music` | Final destination for tagged tracks; must be writable. |
-| `ARTWORK_DIR` | `./artwork` | `/data/artwork` | Storage for downloaded artwork when the feature is enabled. |
+| `ARTWORK_DIR` | `./artwork` | `/config/artwork` | Storage for downloaded artwork when the feature is enabled. |
 
 ## Identity & Security
 

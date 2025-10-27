@@ -30,7 +30,7 @@ require_command() {
 }
 
 CONTAINER_NAME=${HARMONY_LSIO_CONTAINER_NAME:-harmony-lsio}
-IMAGE_NAME=${HARMONY_LSIO_IMAGE_NAME:-ghcr.io/bozzfozz/harmony:lsio}
+IMAGE_NAME=${HARMONY_LSIO_IMAGE_NAME:-lscr.io/linuxserver/harmony:latest}
 HOST_PORT=${HARMONY_LSIO_SMOKE_PORT:-18080}
 TMP_ROOT="$ROOT_DIR/.tmp/lsio-smoke"
 CONFIG_DIR="$TMP_ROOT/config"
