@@ -4,7 +4,6 @@ import sqlite3
 import types
 from uuid import uuid4
 
-import aiosqlite
 import pytest
 
 from app.hdm.idempotency import SQLiteIdempotencyStore
@@ -99,16 +98,16 @@ async def test_sqlite_store_retries_when_database_busy(idempotency_db_path: Path
     )
 
     attempts = 0
-    real_connect = store._connect
+    real_run = store._run_with_connection
 
-    async def flaky_connect(self: SQLiteIdempotencyStore):
+    def flaky_run(self: SQLiteIdempotencyStore, operation):
         nonlocal attempts
         attempts += 1
         if attempts == 1:
             raise sqlite3.OperationalError("database is busy")
-        return await real_connect()
+        return real_run(operation)
 
-    store._connect = types.MethodType(flaky_connect, store)
+    store._run_with_connection = types.MethodType(flaky_run, store)
 
     item = _make_item(dedupe="busy-key")
     reservation = await store.reserve(item)
@@ -125,16 +124,18 @@ async def test_sqlite_store_initialisation_failure_keeps_retrying(
 ) -> None:
     store = SQLiteIdempotencyStore(idempotency_db_path)
     attempts = 0
-    real_connect = aiosqlite.connect
+    real_initialise = store._initialise_sync
 
-    async def flaky_connect(*args, **kwargs):
+    def flaky_initialise(self: SQLiteIdempotencyStore) -> None:
         nonlocal attempts
         attempts += 1
         if attempts == 1:
             raise sqlite3.OperationalError("disk I/O error")
-        return await real_connect(*args, **kwargs)
+        return real_initialise()
 
-    monkeypatch.setattr("app.hdm.idempotency.aiosqlite.connect", flaky_connect)
+    monkeypatch.setattr(
+        store, "_initialise_sync", types.MethodType(flaky_initialise, store)
+    )
 
     failing_item = _make_item(dedupe="init-failure")
     with pytest.raises(sqlite3.OperationalError):

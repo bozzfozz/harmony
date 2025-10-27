@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 import sqlite3
 import time
 from typing import TypeVar
-
-import aiosqlite
-from aiosqlite import OperationalError as AioSqliteOperationalError
 
 from app.logging import get_logger
 
@@ -138,19 +135,19 @@ class SQLiteIdempotencyStore(IdempotencyStore):
         await self._ensure_initialised()
         key = item.dedupe_key
 
-        async def _operation(connection: aiosqlite.Connection) -> IdempotencyReservation:
-            await connection.execute("BEGIN IMMEDIATE")
+        def _operation(connection: sqlite3.Connection) -> IdempotencyReservation:
+            connection.execute("BEGIN IMMEDIATE")
             try:
                 now = time.time()
-                cursor = await connection.execute(SQLITE_INSERT, (key, now, now))
+                cursor = connection.execute(SQLITE_INSERT, (key, now, now))
                 if cursor.rowcount == 1:
-                    await connection.commit()
+                    connection.commit()
                     return IdempotencyReservation(acquired=True, already_processed=False)
-                cursor = await connection.execute(SQLITE_SELECT, (key,))
-                row = await cursor.fetchone()
-                await connection.commit()
+                cursor = connection.execute(SQLITE_SELECT, (key,))
+                row = cursor.fetchone()
+                connection.commit()
             except Exception:
-                await connection.rollback()
+                connection.rollback()
                 raise
             if row is None:
                 return IdempotencyReservation(
@@ -177,34 +174,32 @@ class SQLiteIdempotencyStore(IdempotencyStore):
         await self._ensure_initialised()
         key = item.dedupe_key
 
-        async def _operation(connection: aiosqlite.Connection) -> None:
-            await connection.execute("BEGIN IMMEDIATE")
+        def _operation(connection: sqlite3.Connection) -> None:
+            connection.execute("BEGIN IMMEDIATE")
             try:
                 now = time.time()
                 if success:
-                    await connection.execute(SQLITE_COMPLETE, (now, key))
+                    connection.execute(SQLITE_COMPLETE, (now, key))
                 else:
-                    await connection.execute(SQLITE_DELETE, (key,))
-                await connection.commit()
+                    connection.execute(SQLITE_DELETE, (key,))
+                connection.commit()
             except Exception:
-                await connection.rollback()
+                connection.rollback()
                 raise
 
         await self._execute_with_retry(_operation)
 
     async def _execute_with_retry(
-        self, operation: Callable[[aiosqlite.Connection], Awaitable[_T]]
+        self, operation: Callable[[sqlite3.Connection], _T]
     ) -> _T:
         attempt = 0
         delay = self._retry_base_seconds
         last_error: Exception | None = None
         while attempt < self._max_attempts:
             attempt += 1
-            connection: aiosqlite.Connection | None = None
             try:
-                connection = await self._connect()
-                return await operation(connection)
-            except (sqlite3.OperationalError, AioSqliteOperationalError) as exc:
+                return await asyncio.to_thread(self._run_with_connection, operation)
+            except sqlite3.OperationalError as exc:
                 last_error = exc
                 message = str(exc).lower()
                 should_retry = any(fragment in message for fragment in _RETRYABLE_ERROR_FRAGMENTS)
@@ -222,9 +217,6 @@ class SQLiteIdempotencyStore(IdempotencyStore):
                     delay *= self._retry_multiplier
                     continue
                 raise
-            finally:
-                if connection is not None:
-                    await connection.close()
         assert last_error is not None  # defensive: loop guarantees assignment on failure
         logger.error(
             "Failed to execute SQLite idempotency operation after retries",
@@ -233,14 +225,17 @@ class SQLiteIdempotencyStore(IdempotencyStore):
         )
         raise last_error
 
-    async def _connect(self) -> aiosqlite.Connection:
-        connection = await aiosqlite.connect(
+    def _run_with_connection(self, operation: Callable[[sqlite3.Connection], _T]) -> _T:
+        connection = sqlite3.connect(
             str(self._path),
             timeout=self._connect_timeout,
             isolation_level=None,
         )
-        connection.row_factory = aiosqlite.Row
-        return connection
+        connection.row_factory = sqlite3.Row
+        try:
+            return operation(connection)
+        finally:
+            connection.close()
 
     async def _ensure_initialised(self) -> None:
         if self._initialised:
@@ -249,17 +244,23 @@ class SQLiteIdempotencyStore(IdempotencyStore):
             if self._initialised:
                 return
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            connection: aiosqlite.Connection | None = None
             try:
-                connection = await aiosqlite.connect(str(self._path))
-                await connection.execute("PRAGMA journal_mode=WAL")
-                await connection.execute(SQLITE_CREATE_TABLE)
-                await connection.commit()
+                await asyncio.to_thread(self._initialise_sync)
             except Exception:
                 # Ensure `_initialised` remains ``False`` so subsequent attempts retry.
                 raise
             else:
                 self._initialised = True
-            finally:
-                if connection is not None:
-                    await connection.close()
+
+    def _initialise_sync(self) -> None:
+        connection = sqlite3.connect(
+            str(self._path),
+            timeout=self._connect_timeout,
+            isolation_level=None,
+        )
+        try:
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute(SQLITE_CREATE_TABLE)
+            connection.commit()
+        finally:
+            connection.close()
