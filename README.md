@@ -78,7 +78,7 @@ starting it again with the additional `-v ...:/config`, `-v ...:/downloads`,
 and `-v ...:/music` flags. Harmony reuses the copied files on boot.
 
 The LinuxServer.io docker compose example ships in
-[`compose.yaml`](compose.yaml). Adjust the host paths to match your environment
+[`docker-compose.yml`](docker-compose.yml). Adjust the host paths to match your environment
 and see [`docs/install/docker.md`](docs/install/docker.md) for additional
 deployment notes.
 
