@@ -21,6 +21,7 @@ RUN set -eux; \
     rm -rf /tmp/pip
 
 COPY app/ /app/
+COPY jinja2/ /app/jinja2/
 COPY docker/lsio/root/ /
 
 WORKDIR /app
