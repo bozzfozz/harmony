@@ -1165,7 +1165,7 @@ class Settings:
 
 
 DEFAULT_DB_URL_DEV = "sqlite+aiosqlite:///./harmony.db"
-DEFAULT_DB_URL_PROD = "sqlite+aiosqlite:///data/harmony.db"
+DEFAULT_DB_URL_PROD = "sqlite+aiosqlite:////config/harmony.db"
 DEFAULT_DB_URL_TEST = "sqlite+aiosqlite:///:memory:"
 DEFAULT_SOULSEEK_URL = "http://localhost:5030"
 DEFAULT_SOULSEEK_PORT = urlparse(DEFAULT_SOULSEEK_URL).port or 5030

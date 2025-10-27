@@ -54,7 +54,7 @@ def test_ensure_directory_rejects_file(tmp_path: Path) -> None:
 
 
 def test_ensure_sqlite_database_creates_file(tmp_path: Path) -> None:
-    db_path = tmp_path / "data" / "harmony.db"
+    db_path = tmp_path / "config" / "harmony.db"
     url = f"sqlite+aiosqlite:///{db_path}"  # absolute path ensures direct resolution
     container_entrypoint.ensure_sqlite_database(url)
     assert db_path.exists()
@@ -63,7 +63,7 @@ def test_ensure_sqlite_database_creates_file(tmp_path: Path) -> None:
 def test_ensure_sqlite_database_logs_ready(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    db_path = (tmp_path / "data" / "harmony.db").resolve()
+    db_path = (tmp_path / "config" / "harmony.db").resolve()
     url = f"sqlite+aiosqlite:///{db_path}"  # absolute path ensures direct resolution
     container_entrypoint.ensure_sqlite_database(url)
     captured = capsys.readouterr()
@@ -84,7 +84,7 @@ def test_ensure_sqlite_database_invalid(url: str) -> None:
 def test_ensure_sqlite_database_permission_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    db_path = (tmp_path / "data" / "harmony.db").resolve()
+    db_path = (tmp_path / "config" / "harmony.db").resolve()
     url = f"sqlite+aiosqlite:///{db_path}"
     parent = db_path.parent
 

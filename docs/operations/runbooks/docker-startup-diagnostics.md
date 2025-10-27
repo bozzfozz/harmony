@@ -4,7 +4,7 @@
 - Applies to container launches driven by the published Harmony image and `scripts/docker-entrypoint.sh`.
 - Startup **must** complete `app.runtime.container_entrypoint.main()` without raising `BootstrapError`/`EntrypointError`; otherwise the process exits immediately.
 - Writable directories for downloads and music **must** exist before `uvicorn` starts because the entrypoint validates and touches them (`ensure_directory`).【F:app/runtime/container_entrypoint.py†L242-L320】
-- The effective SQLite database URL defaults to `sqlite+aiosqlite:///./harmony.db` when `DATABASE_URL` is unset; parent directories must therefore be writable by the container user.【F:app/runtime/container_entrypoint.py†L269-L314】【F:app/config.py†L1167-L2140】
+- The effective SQLite database URL defaults to the profile-specific value resolved by `resolve_default_database_url()`; container profiles fall back to `/config/harmony.db` when `DATABASE_URL` is unset, so that directory must remain writable.【F:app/runtime/container_entrypoint.py†L269-L314】【F:app/config.py†L1167-L2140】
 
 ## Observed Symptoms
 - `curl http://127.0.0.1:8080/api/health/live` returns `connection reset` and subsequently `couldn’t connect`, indicating the process dies shortly after binding.
@@ -18,8 +18,8 @@
 2. **Health probe hitting legacy path**  
    - Container exposes `/api/health/live` as the canonical liveness path; `/live` is configurable but defaults to the legacy stub for backwards compatibility.【F:app/runtime/container_entrypoint.py†L340-L404】
    - Probes against `/live` may succeed even when the canonical endpoint fails, masking real readiness regressions. Update automation to target `/api/health/live`.
-3. **SQLite bootstrap blocked**  
-   - When no `DATABASE_URL` is provided, Harmony stores `harmony.db` beside the app bundle; read-only mounts or volume misconfiguration prevent file creation, triggering a `BootstrapError`.【F:app/runtime/container_entrypoint.py†L269-L314】
+3. **SQLite bootstrap blocked**
+   - When no `DATABASE_URL` is provided, Harmony stores `harmony.db` under `/config`; read-only mounts or volume misconfiguration prevent file creation, triggering a `BootstrapError`.【F:app/runtime/container_entrypoint.py†L269-L314】
 
 ## Diagnosis Workflow
 1. **Provision writable volumes**
@@ -59,7 +59,7 @@
    ```
 5. **Validate database artefact**
    ```bash
-   ls -l "$TMP/config" "$TMP/data"/harmony.db
+   ls -l "$TMP/config"/harmony.db "$TMP/data"
    ```
    - If SQLite path differs (custom `DATABASE_URL`), verify parent directory permissions align with `PUID/PGID`.
 
@@ -69,7 +69,7 @@
    - Use `/api/health/live` (liveness) plus optional `/api/health/ready` for readiness in the loop.
    - Capture logs on failure by trapping `ERR` and ensuring container cleanup.
 2. **Runtime resilience**
-   - Extend `bootstrap_environment` to create `/config` (if configured) with the same guard rails as downloads/music.
+   - Ensure `bootstrap_environment` plus `ensure_sqlite_database` create `/config` (if configured) with the same guard rails as downloads/music.
    - Surface misconfigurations through structured log messages to aid automated detection.
 3. **Observability & Testing**
    - Add regression tests asserting that `bootstrap_environment` raises a `BootstrapError` when directories are missing or read-only.
@@ -79,7 +79,7 @@
 | Option | Pros | Cons |
 | --- | --- | --- |
 | Lazy-create directories inside request handlers | Simplifies bootstrap requirements | Defers failure until user interaction; harder to debug under automation |
-| Switch default SQLite path to `/config/harmony.db` | Aligns with expectation of config volume | Requires migration for existing deployments; still needs writable parent |
+| Switch default SQLite path to `/config/harmony.db` (current default) | Aligns with expectation of config volume | Requires migration for existing deployments; still needs writable parent |
 | Ship default tmpfs volumes baked into container | No host mounts required | Breaks persistence expectations; data lost on restart |
 
 **Chosen approach:** Harden bootstrap + smoke harness. It fails fast with actionable errors, keeps persistent storage under operator control, and maintains backward compatibility.

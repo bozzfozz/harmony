@@ -1,14 +1,14 @@
 # Self-check run — 2025-02-14
 
 ## Environment preparation
-- Created persistent directories `/data`, `/downloads`, `/music` and provisioned an empty SQLite database at `/data/harmony.db` to mirror the production volume layout.
+- Created persistent directories `/config`, `/downloads`, `/music` and provisioned an empty SQLite database at `/config/harmony.db` to mirror the production volume layout.
 - Launched a temporary HTTP server on `127.0.0.1:5030` to satisfy the Soulseekd TCP probe.
 - Network egress is blocked, preventing `pip install -r requirements.txt`. Provided lightweight runtime stubs for `sqlalchemy` and `aiosqlite` via `PYTHONPATH=/tmp/harmony_stubs` so the guard could execute offline.
 
 ## Executed commands
 ```
 APP_ENV=prod \
-DATABASE_URL=sqlite+aiosqlite:///data/harmony.db \
+DATABASE_URL=sqlite+aiosqlite:////config/harmony.db \
 SPOTIFY_CLIENT_ID=dummy-client \
 SPOTIFY_CLIENT_SECRET=dummy-secret \
 OAUTH_SPLIT_MODE=false \
@@ -26,7 +26,7 @@ A follow-up verbose invocation produced the readiness payload for documentation 
 
 ```
 APP_ENV=prod \
-DATABASE_URL=sqlite+aiosqlite:///data/harmony.db \
+DATABASE_URL=sqlite+aiosqlite:////config/harmony.db \
 SPOTIFY_CLIENT_ID=dummy-client \
 SPOTIFY_CLIENT_SECRET=dummy-secret \
 OAUTH_SPLIT_MODE=false \

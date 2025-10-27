@@ -26,7 +26,7 @@ configuration payloads. They follow the rules below:
 
 | Variable | Default | Example | Notes |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | `sqlite+aiosqlite:///data/harmony.db` | `sqlite+aiosqlite:///data/harmony.db` | SQLite is the only supported database. |
+| `DATABASE_URL` | `sqlite+aiosqlite:////config/harmony.db` | `sqlite+aiosqlite:////config/harmony.db` | SQLite is the only supported database. |
 | `APP_PORT` | `8080` | `8080` | Single exposed port for API and UI; container binds to `0.0.0.0`. |
 | `APP_MODULE` | `app.main:app` | `app.main:app` | ASGI application entrypoint. |
 | `UVICORN_EXTRA_ARGS` | _(empty)_ | `--log-level debug` | Additional flags for the embedded Uvicorn server. |

@@ -2,14 +2,15 @@
 
 Harmony ships as a single container image that exposes the FastAPI backend on
 **port 8080**. SQLite is the only supported database; the container creates and
-maintains `harmony.db` inside the `/data` volume.
+maintains `harmony.db` inside the `/config` volume.
 
 ## Prerequisites
 
 - Docker 20.10 or newer.
 - Spotify and Soulseek credentials (if you intend to enable HDM PRO flows).
 - Host directories for persistent storage:
-  - `/config` – holds the generated `harmony.yml` and (optionally) backups.
+  - `/config` – stores the SQLite database (`harmony.db`) and (optionally) backups.
+  - `/data` – receives the generated `harmony.yml` configuration file.
   - `/downloads` – temporary workspace for HDM downloads.
   - `/music` – final library location managed by HDM.
   - Optional: `/data/runtime/oauth_state` when using the OAuth split mode.
@@ -45,9 +46,10 @@ docker run -d \
   ghcr.io/bozzfozz/harmony:1.0.0
 ```
 
-- Mount `/data` to persist the SQLite database (`harmony.db`) and generated
-  configuration (`harmony.yml`). Replace `$(pwd)/volumes/data` with the host
-  directory that should hold these files.
+- Mount `/config` to persist the SQLite database (`harmony.db`). Replace
+  `$(pwd)/volumes/config` with the host directory that should hold the database.
+- Mount `/data` to persist the generated configuration (`harmony.yml`). Replace
+  `$(pwd)/volumes/data` with the host directory that should hold the file.
 - Mount `/downloads` and `/music` to persist downloads and the organised
   library.
 - Mount `/config` to keep configuration assets separate from application data.
@@ -72,11 +74,12 @@ curl -fsS http://127.0.0.1:8080/api/health/ready?verbose=1
 Both commands must return HTTP 200. The ready endpoint prints dependency details when
 `verbose=1` is supplied.
 
-To retrofit the `/data` mount on an existing container, create the persistent
-host directory, copy `harmony.db` and `harmony.yml` out of the container
-(`docker cp harmony:/data/harmony.db ./data/ && docker cp harmony:/data/harmony.yml ./data/`),
-stop the container, and restart it with the extra `-v ...:/data` flag. Harmony
-will reuse the copied files on the next boot.
+To retrofit the `/config` and `/data` mounts on an existing container, create
+the persistent host directories, copy `harmony.db` and `harmony.yml` out of the
+container (`docker cp harmony:/config/harmony.db ./config/ && docker cp
+harmony:/data/harmony.yml ./data/`), stop the container, and restart it with the
+extra `-v ...:/config` and `-v ...:/data` flags. Harmony will reuse the copied
+files on the next boot.
 
 ## Using docker compose
 
@@ -141,10 +144,10 @@ docker compose up -d
 
 ## SQLite Backups
 
-Harmony writes `harmony.db` into the `/data` volume. To back it up safely:
+Harmony writes `harmony.db` into the `/config` volume. To back it up safely:
 
 1. Stop the container or ensure no writes occur (`docker stop harmony`).
-2. Copy `/data/harmony.db` from the host volume.
+2. Copy `/config/harmony.db` from the host volume.
 3. Restart the container (`docker start harmony`).
 
 Avoid copying the database while the service is actively writing to it to prevent
