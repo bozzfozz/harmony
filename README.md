@@ -37,16 +37,18 @@ in [`docs/ai/README.md`](docs/ai/README.md).
 docker run -d \
   --name harmony \
   -p 8080:8080 \
+  -v $(pwd)/config:/config \
   -v $(pwd)/data:/data \
   -v $(pwd)/data/downloads:/downloads \
   -v $(pwd)/data/music:/music \
   ghcr.io/bozzfozz/harmony:1.0.0
 ```
 
-- Mount `/data` to persist the SQLite database (`harmony.db`) and generated
-  configuration (`harmony.yml`). Replace `$(pwd)/data` with the host directory
-  that should store these files. Harmony creates both on first boot when they
-  are missing.
+- Mount `/config` to persist the SQLite database (`harmony.db`). Replace
+  `$(pwd)/config` with the host directory that should store the database.
+- Mount `/data` to persist the generated configuration (`harmony.yml`). Replace
+  `$(pwd)/data` with the host directory that should store the configuration
+  file. Harmony creates both on first boot when they are missing.
 - Mount `/downloads` and `/music` to persist downloads and the
   organised library.
 - Harmony boots without API keys so the Quickstart stays local-friendly. Restrict
@@ -67,11 +69,12 @@ docker run -d \
   The versioned system endpoints live under `/api/v1/...`; see
   [`docs/ui/fe-htmx-plan.md`](docs/ui/fe-htmx-plan.md) for the UI wiring overview.
 
-Existing deployments can adopt the `/data` mount by creating the host
-directory, copying `harmony.db` and `harmony.yml` out of the running container
-(`docker cp harmony:/data/harmony.db ./data/ && docker cp harmony:/data/harmony.yml ./data/`),
-stopping the container, and starting it again with the additional `-v ...:/data`
-flag. Harmony reuses the copied files on boot.
+Existing deployments can adopt the `/config` and `/data` mounts by creating the
+host directories, copying `harmony.db` and `harmony.yml` out of the running
+container (`docker cp harmony:/config/harmony.db ./config/ && docker cp
+harmony:/data/harmony.yml ./data/`), stopping the container, and starting it
+again with the additional `-v ...:/config` and `-v ...:/data` flags. Harmony
+reuses the copied files on boot.
 
 A docker compose definition with the same defaults ships in
 [`compose.yaml`](compose.yaml). Adjust the `/mnt/...` host paths to match your

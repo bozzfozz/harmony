@@ -37,14 +37,14 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
 
 @pytest.fixture(autouse=True)
 def _test_environment(tmp_path: Path) -> Iterator[None]:
-    data_dir = tmp_path / "data"
+    config_dir = tmp_path / "config"
     downloads_dir = tmp_path / "downloads"
     music_dir = tmp_path / "music"
     oauth_state_dir = tmp_path / "oauth_state"
-    for directory in (data_dir, downloads_dir, music_dir, oauth_state_dir):
+    for directory in (config_dir, downloads_dir, music_dir, oauth_state_dir):
         directory.mkdir(parents=True, exist_ok=True)
 
-    db_path = data_dir / "harmony.db"
+    db_path = config_dir / "harmony.db"
 
     os.environ.setdefault("APP_ENV", "test")
     os.environ.setdefault("SPOTIFY_CLIENT_ID", "test-client")

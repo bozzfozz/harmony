@@ -44,9 +44,9 @@ Diese Anleitung ergänzt die Tabellen im [README](../../README.md#betrieb--konfi
 
 ### SQLite-Betrieb
 
-- Standardmäßig nutzt Harmony SQLite (`sqlite+aiosqlite:///`). Produktionsprofile schreiben nach `/data/harmony.db`; Entwicklungsprofile nach `./harmony.db`. Tests verwenden eine In-Memory-Instanz.
+- Standardmäßig nutzt Harmony SQLite (`sqlite+aiosqlite:///`). Produktionsprofile schreiben nach `/config/harmony.db`; Entwicklungsprofile nach `./harmony.db`. Tests verwenden eine In-Memory-Instanz.
 - Setze `DB_RESET=1`, um den Datenbankfile beim Start zu löschen und das Schema frisch zu bootstrappen. Ohne das Flag bleibt der bestehende Inhalt erhalten.
-- Prüfe, dass das über `DATABASE_URL` adressierte Verzeichnis existiert und beschreibbar ist (Readiness-Check `/api/health/ready`). Bei Container-Deployments sollte ein Volume `/data` gemountet werden.
+- Prüfe, dass das über `DATABASE_URL` adressierte Verzeichnis existiert und beschreibbar ist (Readiness-Check `/api/health/ready`). Bei Container-Deployments sollte ein Volume `/config` gemountet werden.
 - SQLite serialisiert Schreibzugriffe. Hohe Parallelität in Worker-Jobs lässt sich durch kleinere Batches (`WATCHLIST_*`, `RETRY_*`) und Warteschlangensteuerung kompensieren.
 - Backups bestehen aus einem Kopieren der `.db`-Datei. Stoppe die Applikation oder setze `DB_RESET=0`, bevor du Snapshots ziehst, um Konsistenz zu gewährleisten.
 
