@@ -43,14 +43,13 @@ docker run -d \
   -v $(pwd)/config:/config \
   -v $(pwd)/downloads:/downloads \
   -v $(pwd)/music:/music \
-  ghcr.io/bozzfozz/harmony:lsio
+  lscr.io/linuxserver/harmony:latest
 ```
 
-- Mount `/config` to persist the SQLite database (`harmony.db`). Replace
-- Harmony writes the generated configuration file (`harmony.yml`) into the
-  same `/config` volume. Replace `$(pwd)/config` with the host directory that
-  should store both files. Harmony creates them on first boot when they are
-  missing.
+- Mount `/config` to persist the SQLite database (`harmony.db`) and the
+  generated configuration file (`harmony.yml`). Replace `$(pwd)/config` with
+  the host directory that should store both files. Harmony creates them on
+  first boot when they are missing.
 - Mount `/downloads` and `/music` to persist downloads and the organised
   library.
 - Harmony boots without API keys so the Quickstart stays local-friendly. Restrict

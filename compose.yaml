@@ -1,6 +1,6 @@
 services:
   harmony:
-    image: ghcr.io/bozzfozz/harmony:lsio
+    image: lscr.io/linuxserver/harmony:latest
     container_name: harmony
     environment:
       - PUID=1000

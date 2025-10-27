@@ -22,7 +22,7 @@ smoke:
 	./scripts/dev/smoke_unified.sh
 
 image-lsio:
-	docker build -f docker/Dockerfile.lsio -t ghcr.io/bozzfozz/harmony:lsio .
+	docker build -f docker/Dockerfile.lsio -t lscr.io/linuxserver/harmony:latest .
 
 smoke-lsio:
 	./scripts/dev/smoke_lsio.sh
