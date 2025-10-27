@@ -24,7 +24,7 @@ Der Audit-Status ist in [HDM Audit](../../compliance/hdm_audit.md) dokumentiert.
    [Konfigurationsreferenz](../../configuration.md)
    gesetzt sind. Geheimnisse niemals ins Repo schreiben.
 3. **Verzeichnisse:**
-   - `/data` (Downloads & Musik) — Schreibrechte `uid=1000` bzw. `chmod 775`.
+   - `/downloads` & `/music` — Schreibrechte `uid=1000` bzw. `chmod 775`.
    - `reports/` (Coverage, JUnit) — `chmod 775`, falls hostpersistent genutzt.
    - Optional eingehängte Secrets (`/run/secrets/*` oder `/var/lib/harmony/oauth`) —
      `chmod 700` (Dirs) / `chmod 600` (Files).

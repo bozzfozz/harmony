@@ -5,7 +5,7 @@ Dieses Runbook dokumentiert, wie Harmony seine SQLite-Datenbank verwaltet und wi
 ## Speicherort & Konfiguration
 
 - **Default-DSN:** `sqlite+aiosqlite:///./harmony.db` (Entwicklung) bzw. `sqlite+aiosqlite:////config/harmony.db` (Staging/Prod). Die Pfade stammen aus `app/config.py` und können über `DATABASE_URL` überschrieben werden.
-- **Persistenz:** Mountet bei Container-Deployments ein Volume unter `/config`, damit `harmony.db` erhalten bleibt, und bindet `/data` für die generierte `harmony.yml` ein.
+- **Persistenz:** Mountet bei Container-Deployments ein Volume unter `/config`, damit `harmony.db` und die generierte `harmony.yml` erhalten bleiben.
 - **Reset:** Setze `DB_RESET=1`, um den Datenbank-File beim Start neu anzulegen. Ohne das Flag bleibt der vorhandene Inhalt erhalten.
 
 ## Startup & Health

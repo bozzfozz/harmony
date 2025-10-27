@@ -9,7 +9,7 @@ self-check CLI (`python -m app.ops.selfcheck --assert-startup`) and the health e
 | Symptom | Likely Cause | Resolution |
 | --- | --- | --- |
 | Port 8080 already in use | Another service listens on the host port. | Stop the conflicting service or map Harmony to a different host port (`-p 8080:8080` → `-p 18080:8080`). Update exposed URLs and `ALLOWED_ORIGINS` accordingly. |
-| `/api/health/ready` returns `503` with DB errors | SQLite file missing or unreadable. | Ensure the `/data` volume is writable. Remove stale locks or recreate the database with `DB_RESET=1` (last resort). |
+| `/api/health/ready` returns `503` with DB errors | SQLite file missing or unreadable. | Ensure the `/config` volume is writable. Remove stale locks or recreate the database with `DB_RESET=1` (last resort). |
 | Downloads remain in "pending" | HDM cannot reach slskd or lacks credentials. | Verify `SLSKD_BASE_URL` and `SLSKD_API_KEY`. Use `curl` from the container to confirm connectivity. |
 | OAuth flow fails with `OAUTH_STATE_MISMATCH` | Redirect URL changed or state expired. | Restart the flow from the UI or API; avoid opening multiple tabs. |
 | Spotify callback shows `ERR_CONNECTION_REFUSED` | Browser cannot reach `127.0.0.1:8888`. | Replace the host with the actual server IP or tunnel the port (`ssh -N -L 8888:127.0.0.1:8888 ...`). |
@@ -46,7 +46,7 @@ python -m app.ops.selfcheck --assert-startup
 ```
 
 The command fails fast when directories or databases cannot be created. Structured log
-lines such as `{"event": "sqlite.bootstrap.parent_not_writable", "parent": "/data"}`
+lines such as `{"event": "sqlite.bootstrap.parent_not_writable", "parent": "/config"}`
 indicate missing write permissions on the database directory. Resolve permission errors by
 aligning host ownership (`chown <uid>:<gid> <path>`) with the container's `PUID`/`PGID`
 or by mounting writable directories. Re-run the command until it returns exit code `0`

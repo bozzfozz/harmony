@@ -90,7 +90,6 @@ def _ensure_directory(path: Path, label: str, puid: int, pgid: int) -> None:
 def ensure_directories(
     *,
     config_dir: Path,
-    data_dir: Path,
     downloads_dir: Path,
     music_dir: Path,
     puid: int,
@@ -100,7 +99,6 @@ def ensure_directories(
 
     ordered: Iterable[tuple[str, Path]] = (
         ("config", config_dir),
-        ("data", data_dir),
         ("downloads", downloads_dir),
         ("music", music_dir),
     )
@@ -120,12 +118,6 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=Path("volumes/config"),
         help="Host directory mapped to /config inside the container.",
-    )
-    parser.add_argument(
-        "--data-dir",
-        type=Path,
-        default=Path("volumes/data"),
-        help="Host directory mapped to /data inside the container.",
     )
     parser.add_argument(
         "--downloads-dir",
@@ -161,7 +153,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         ensure_directories(
             config_dir=args.config_dir,
-            data_dir=args.data_dir,
             downloads_dir=downloads_dir,
             music_dir=music_dir,
             puid=args.puid,
@@ -173,7 +164,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(
         "[ok] Prepared volume directories:\n"
         f"  /config     ← {args.config_dir.resolve()}\n"
-        f"  /data       ← {args.data_dir.resolve()}\n"
         f"  /downloads ← {downloads_dir.resolve()}\n"
         f"  /music     ← {music_dir.resolve()}"
     )

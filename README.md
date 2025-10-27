@@ -37,20 +37,22 @@ in [`docs/ai/README.md`](docs/ai/README.md).
 docker run -d \
   --name harmony \
   -p 8080:8080 \
+  -e PUID=1000 \
+  -e PGID=1000 \
+  -e TZ=Etc/UTC \
   -v $(pwd)/config:/config \
-  -v $(pwd)/data:/data \
-  -v $(pwd)/data/downloads:/downloads \
-  -v $(pwd)/data/music:/music \
-  ghcr.io/bozzfozz/harmony:1.0.0
+  -v $(pwd)/downloads:/downloads \
+  -v $(pwd)/music:/music \
+  ghcr.io/bozzfozz/harmony:lsio
 ```
 
 - Mount `/config` to persist the SQLite database (`harmony.db`). Replace
-  `$(pwd)/config` with the host directory that should store the database.
-- Mount `/data` to persist the generated configuration (`harmony.yml`). Replace
-  `$(pwd)/data` with the host directory that should store the configuration
-  file. Harmony creates both on first boot when they are missing.
-- Mount `/downloads` and `/music` to persist downloads and the
-  organised library.
+- Harmony writes the generated configuration file (`harmony.yml`) into the
+  same `/config` volume. Replace `$(pwd)/config` with the host directory that
+  should store both files. Harmony creates them on first boot when they are
+  missing.
+- Mount `/downloads` and `/music` to persist downloads and the organised
+  library.
 - Harmony boots without API keys so the Quickstart stays local-friendly. Restrict
   the container to trusted networks or define `HARMONY_API_KEYS` before exposing
   it beyond your LAN.
@@ -62,24 +64,24 @@ docker run -d \
     configured IDs before starting Uvicorn.
   - Provide them via `-e ...` flags or a `.env` file when exposing Harmony
     beyond trusted networks.
-- Edit `/data/harmony.yml` to tailor Harmony; environment variables still win
+- Edit `/config/harmony.yml` to tailor Harmony; environment variables still win
   over values defined in the YAML.
 - Verify the deployment with `curl -fsS http://127.0.0.1:8080/api/health/live` and
   `curl -fsS "http://127.0.0.1:8080/api/health/ready?verbose=1"`.
   The versioned system endpoints live under `/api/v1/...`; see
   [`docs/ui/fe-htmx-plan.md`](docs/ui/fe-htmx-plan.md) for the UI wiring overview.
 
-Existing deployments can adopt the `/config` and `/data` mounts by creating the
-host directories, copying `harmony.db` and `harmony.yml` out of the running
-container (`docker cp harmony:/config/harmony.db ./config/ && docker cp
-harmony:/data/harmony.yml ./data/`), stopping the container, and starting it
-again with the additional `-v ...:/config` and `-v ...:/data` flags. Harmony
-reuses the copied files on boot.
+Existing deployments can adopt the `/config`, `/downloads` and `/music` mounts
+by creating the host directories, copying `harmony.db` and `harmony.yml` out of
+the running container (`docker cp harmony:/config/harmony.db ./config/ &&
+docker cp harmony:/config/harmony.yml ./config/`), stopping the container, and
+starting it again with the additional `-v ...:/config`, `-v ...:/downloads`,
+and `-v ...:/music` flags. Harmony reuses the copied files on boot.
 
-A docker compose definition with the same defaults ships in
-[`compose.yaml`](compose.yaml). Adjust the `/mnt/...` host paths to match your
-environment and see [`docs/install/docker.md`](docs/install/docker.md) for
-additional deployment notes.
+The LinuxServer.io docker compose example ships in
+[`compose.yaml`](compose.yaml). Adjust the host paths to match your environment
+and see [`docs/install/docker.md`](docs/install/docker.md) for additional
+deployment notes.
 
 > The canonical backend version lives in [`app/version.py`](app/version.py).
 > Harmony v**1.0.0** exposes the same number via `/api/health/live`, `/live`, `/env`
@@ -97,7 +99,7 @@ deployments. Key options:
 | `UI_COOKIES_SECURE` | `false` | Marks UI session, CSRF and pagination cookies as `Secure`. | Enable behind TLS; default stays `false` to support local HTTP testing. |
 | `DOWNLOADS_DIR` | `/downloads` | Workspace for HDM downloads. | Override when the downloads path differs from the default mount. |
 | `MUSIC_DIR` | `/music` | Target library for organised media. | Override when the music library lives elsewhere. |
-| `harmony.yml` | auto-generated | YAML file under `/data` containing every tunable variable. | Edit to persist configuration between restarts. |
+| `harmony.yml` | auto-generated | YAML file under `/config/harmony.yml` containing every tunable variable. | Edit to persist configuration between restarts. |
 
 All other knobs are documented in [`docs/configuration.md`](docs/configuration.md).
 
