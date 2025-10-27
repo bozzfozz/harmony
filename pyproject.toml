@@ -45,7 +45,7 @@ harmony-selfcheck = "app.ops.selfcheck:main"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["app", "app.*", "jinja2"]
+include = ["app", "app.*", "jinja2", "pytest_cov", "pytest_cov.*"]
 
 [tool.setuptools.package-data]
 app = [
