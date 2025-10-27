@@ -189,9 +189,7 @@ class SQLiteIdempotencyStore(IdempotencyStore):
 
         await self._execute_with_retry(_operation)
 
-    async def _execute_with_retry(
-        self, operation: Callable[[sqlite3.Connection], _T]
-    ) -> _T:
+    async def _execute_with_retry(self, operation: Callable[[sqlite3.Connection], _T]) -> _T:
         attempt = 0
         delay = self._retry_base_seconds
         last_error: Exception | None = None

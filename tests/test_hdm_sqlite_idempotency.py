@@ -133,9 +133,7 @@ async def test_sqlite_store_initialisation_failure_keeps_retrying(
             raise sqlite3.OperationalError("disk I/O error")
         return real_initialise()
 
-    monkeypatch.setattr(
-        store, "_initialise_sync", types.MethodType(flaky_initialise, store)
-    )
+    monkeypatch.setattr(store, "_initialise_sync", types.MethodType(flaky_initialise, store))
 
     failing_item = _make_item(dedupe="init-failure")
     with pytest.raises(sqlite3.OperationalError):

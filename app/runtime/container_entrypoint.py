@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, MutableMapping, Sequence
-import json
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import re
@@ -84,7 +84,7 @@ def log_event(
     level: str = "info",
     payload: Mapping[str, object] | None = None,
 ) -> None:
-    message = {"event": event}
+    message: dict[str, object] = {"event": event}
     if payload:
         message.update(_normalise_payload(payload))
     stream = sys.stdout if level == "info" else sys.stderr

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-import subprocess
 from pathlib import Path
+import subprocess
 
 
 def _write_stub(stub_dir: Path, name: str, body: str) -> None:
@@ -18,15 +18,19 @@ def test_lsio_run_preserves_preconfigured_database_url(tmp_path: Path) -> None:
     stub_dir = tmp_path / "stub-bin"
     stub_dir.mkdir()
 
-    _write_stub(stub_dir, "getent", "case \"$1\" in\n  passwd|group) exit 2 ;;\n  *) exit 0 ;;\nesac\n")
+    _write_stub(
+        stub_dir, "getent", 'case "$1" in\n  passwd|group) exit 2 ;;\n  *) exit 0 ;;\nesac\n'
+    )
     for command in ("addgroup", "adduser", "delgroup", "deluser", "mkdir", "chown"):
         _write_stub(stub_dir, command, "exit 0\n")
 
-    _write_stub(
-        stub_dir,
-        "s6-setuidgid",
-        "if [ -n \"${ENV_CAPTURE_PATH:-}\" ]; then\n  printf '%s\n' \"${SQLALCHEMY_DATABASE_URL:-}\" > \"${ENV_CAPTURE_PATH}\"\nfi\nexit 0\n",
-    )
+    s6_stub_lines = [
+        'if [ -n "${ENV_CAPTURE_PATH:-}" ]; then',
+        ('  printf \'%s\\n\' "${SQLALCHEMY_DATABASE_URL:-}" > "${ENV_CAPTURE_PATH}"'),
+        "fi",
+        "exit 0",
+    ]
+    _write_stub(stub_dir, "s6-setuidgid", "\n".join(s6_stub_lines))
 
     capture_file = tmp_path / "dsn.txt"
 
