@@ -39,7 +39,7 @@ if [ -n "$UMASK_VALUE" ]; then
     umask "$UMASK_VALUE"
 fi
 
-export SQLALCHEMY_DATABASE_URL="sqlite:////config/harmony.db"
+export SQLALCHEMY_DATABASE_URL="${SQLALCHEMY_DATABASE_URL:-sqlite:////config/harmony.db}"
 export HOME=/config
 
 if command -v alembic >/dev/null 2>&1 && [ -f /app/alembic.ini ]; then
