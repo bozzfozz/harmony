@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+_BUFFER_TYPES = (bytes, bytearray, memoryview)
+
 __all__ = ["safe_dumps", "safe_loads", "try_parse_json_or_none"]
 
 
@@ -24,11 +26,15 @@ def safe_dumps(obj: Any) -> str:
     )
 
 
-def safe_loads(data: str | bytes | bytearray) -> Any:
+def safe_loads(data: str | bytes | bytearray | memoryview) -> Any:
     """Parse JSON data strictly, rejecting blank inputs."""
 
-    if isinstance(data, bytes | bytearray):
-        buffer: bytes = bytes(data) if isinstance(data, bytearray) else data
+    if isinstance(data, _BUFFER_TYPES):
+        buffer: bytes
+        if isinstance(data, bytes):
+            buffer = data
+        else:
+            buffer = bytes(data)
         if not buffer.strip():
             raise ValueError("data must not be empty")
         return json.loads(buffer)
@@ -40,7 +46,9 @@ def safe_loads(data: str | bytes | bytearray) -> Any:
     raise TypeError("data must be str or bytes")
 
 
-def try_parse_json_or_none(data: str | bytes | bytearray | None) -> Any | None:
+def try_parse_json_or_none(
+    data: str | bytes | bytearray | memoryview | None,
+) -> Any | None:
     """Return parsed JSON or ``None`` for invalid/blank input."""
 
     if data is None:
