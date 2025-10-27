@@ -88,7 +88,7 @@ the directories:
 python -m scripts.preflight_volume_check
 ```
 
-[`compose.yaml`](../../compose.yaml) is the canonical docker compose definition:
+[`docker-compose.yml`](../../docker-compose.yml) is the canonical docker compose definition:
 
 ```yaml
 services:
