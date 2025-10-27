@@ -9,12 +9,12 @@ optionally adjusts ownership when executed with elevated privileges.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable, Sequence
 import os
+from pathlib import Path
 import stat
 import sys
 import uuid
-from pathlib import Path
-from typing import Iterable, Sequence
 
 
 class PreflightError(RuntimeError):
