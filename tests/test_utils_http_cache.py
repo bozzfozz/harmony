@@ -90,3 +90,11 @@ def test_is_request_not_modified_rejects_non_matching_etag():
     request = _make_request({"if-none-match": '"other"'})
 
     assert not is_request_not_modified(request, etag=etag, last_modified=None)
+
+
+def test_is_request_not_modified_ignores_subsecond_last_modified():
+    last_modified = datetime(2024, 5, 1, 12, 30, 0, 500000, tzinfo=UTC)
+    header_value = format_http_datetime(last_modified)
+    request = _make_request({"if-modified-since": header_value})
+
+    assert is_request_not_modified(request, etag=None, last_modified=last_modified)
