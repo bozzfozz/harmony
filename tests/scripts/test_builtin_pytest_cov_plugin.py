@@ -6,11 +6,11 @@ import xml.etree.ElementTree as ET
 import pytest
 from pytest_cov.plugin import HarmonyCoveragePlugin
 
-pytest_plugins = ("pytester",)
-
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+pytest_plugins = ("pytester",)
 
 
 def test_builtin_pytest_cov_generates_reports(pytester: pytest.Pytester) -> None:
@@ -104,3 +104,63 @@ def test_builtin_pytest_cov_dot_target_scopes_to_repo(tmp_path: Path) -> None:
 
     assert plugin._target_files
     assert all(path.is_relative_to(root) for path in plugin._target_files)
+
+
+def test_builtin_pytest_cov_caches_filename_resolution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "repo"
+    package = root / "pkg"
+    package.mkdir(parents=True)
+    first = package / "alpha.py"
+    first.write_text("VALUE = 1\nVALUE = 2\n", encoding="utf-8")
+    second = package / "beta.py"
+    second.write_text("VALUE = 3\n", encoding="utf-8")
+
+    class _StubConfig:
+        def __init__(self, base: Path) -> None:
+            self.rootpath = base
+            self.pluginmanager = object()
+
+        def getoption(self, name: str) -> list[str]:
+            if name == "harmony_cov_targets":
+                return ["pkg"]
+            if name == "harmony_cov_reports":
+                return []
+            raise AssertionError(f"unexpected option request: {name}")
+
+    plugin = HarmonyCoveragePlugin(_StubConfig(root))
+    plugin._target_files = [first.resolve(), second.resolve()]
+
+    original_resolve = Path.resolve
+    resolution_counts: dict[str, int] = {}
+
+    def _tracking_resolve(self: Path) -> Path:
+        key = str(self)
+        resolution_counts[key] = resolution_counts.get(key, 0) + 1
+        if key.endswith("ghost.py"):
+            raise FileNotFoundError("cannot resolve ghost path")
+        return original_resolve(self)
+
+    monkeypatch.setattr("pytest_cov.plugin.Path.resolve", _tracking_resolve)
+
+    counts: dict[tuple[str, int], int] = {
+        (str(first), 1): 1,
+        (str(first), 2): 5,
+        (str(second), 1): 3,
+        ("ghost.py", 99): 1,
+        ("ignored.py", 7): 2,
+    }
+
+    reports = plugin._build_reports(counts)
+
+    coverage_by_file = {report.relative.name: report.executed for report in reports}
+    assert coverage_by_file == {
+        "alpha.py": {1: 1, 2: 5},
+        "beta.py": {1: 3},
+    }
+
+    assert resolution_counts[str(first)] == 1
+    assert resolution_counts[str(second)] == 1
+    assert resolution_counts["ignored.py"] == 1
+    assert resolution_counts["ghost.py"] == 1
