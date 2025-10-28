@@ -10,6 +10,7 @@ from pytest_cov.plugin import HarmonyCoveragePlugin
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
+
 pytest_plugins = ("pytester",)
 
 
