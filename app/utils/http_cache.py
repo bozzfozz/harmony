@@ -115,7 +115,11 @@ def _ensure_utc(value: datetime | None) -> datetime:
         return _EPOCH
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
-    return value.astimezone(UTC)
+    # HTTP validators such as ``If-Modified-Since`` only support second
+    # precision. Normalise here so the value we compare against matches the
+    # timestamp emitted in ``Last-Modified`` headers and avoids false cache
+    # misses caused by microsecond differences.
+    return value.astimezone(UTC).replace(microsecond=0)
 
 
 def _parse_http_datetime(value: str) -> datetime | None:
