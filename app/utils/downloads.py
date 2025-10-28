@@ -48,7 +48,9 @@ def _normalise_status(value: str) -> str:
     return value.strip().lower()
 
 
-def resolve_status_filter(value: str) -> set[str]:
+def resolve_status_filter(value: object) -> set[str]:
+    if not isinstance(value, str):
+        raise ValidationAppError("Invalid status filter")
     normalised = _normalise_status(value)
     states = STATUS_FILTERS.get(normalised)
     if states is None:
