@@ -117,6 +117,13 @@ def test_pytest_cov_fixer_reports_failure(monkeypatch: pytest.MonkeyPatch) -> No
     assert outcome.warnings
 
 
+def test_pytest_cov_fixer_matches_modulenotfound() -> None:
+    stderr = "ModuleNotFoundError: No module named 'pytest_cov'"
+    context = _make_context(stderr)
+    fixer = auto_repair_engine.PytestCovFixer()
+    assert fixer.matches(context)
+
+
 def test_engine_aborts_when_pytest_cov_setup_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     stage = auto_repair_engine.RepairStage(
         name="test",

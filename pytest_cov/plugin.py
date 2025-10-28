@@ -185,19 +185,44 @@ class HarmonyCoveragePlugin:
             self._write_xml_report(coverage, self._reports.xml_path)
 
     def _build_reports(self, counts: dict[tuple[str, int], int]) -> list[FileCoverage]:
+        if not self._target_files:
+            return []
+
+        execution_by_path: dict[Path, dict[int, int]] = {
+            path: {} for path in self._target_files
+        }
+        resolution_cache: dict[str, Path | None] = {}
+        target_lookup = {path: path for path in self._target_files}
+
+        for (filename, lineno), hits in counts.items():
+            cached = resolution_cache.get(filename)
+            if cached is None and filename in resolution_cache:
+                continue
+            if cached is None:
+                try:
+                    resolved = Path(filename).resolve()
+                except OSError:
+                    resolution_cache[filename] = None
+                    continue
+                resolution_cache[filename] = resolved
+            else:
+                resolved = cached
+
+            target = target_lookup.get(resolved)
+            if target is None:
+                continue
+
+            execution_by_path[target][int(lineno)] = hits
+
         reports: list[FileCoverage] = []
         for path in self._target_files:
-            executed: dict[int, int] = {}
-            for (filename, lineno), hits in counts.items():
-                if Path(filename).resolve() == path:
-                    executed[int(lineno)] = hits
             statements = self._statement_lines(path)
             reports.append(
                 FileCoverage(
                     path=path,
                     relative=path.relative_to(self._root),
                     statements=sorted(statements),
-                    executed=executed,
+                    executed=dict(execution_by_path.get(path, {})),
                 )
             )
         return sorted(reports, key=lambda item: item.relative.as_posix())

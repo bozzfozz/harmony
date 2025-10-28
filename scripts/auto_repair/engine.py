@@ -252,9 +252,11 @@ class PytestCovFixer(Fixer):
 
     def matches(self, context: RepairContext) -> bool:
         output = context.combined_output.lower()
-        if "unrecognized arguments" not in output:
-            return False
-        return "--cov" in output or "--cov-report" in output
+        if "modulenotfounderror" in output or "module not found" in output:
+            return "pytest_cov" in output
+        if "unrecognized arguments" in output:
+            return "--cov" in output or "--cov-report" in output
+        return False
 
     def apply(self, context: RepairContext, logger: ReasonTraceLogger) -> FixOutcome:
         logger.emit(
@@ -289,7 +291,6 @@ class PytestCovFixer(Fixer):
 
         warnings = [] if setup.installed else ["Install pytest-cov manually and re-run tests"]
         commands = [command_display] if setup.command else []
-        resolved_without_rerun = setup.command is None and not setup.env_updates
         return FixOutcome(
             issue_id=self.issue_id,
             description=self.description,
@@ -298,7 +299,7 @@ class PytestCovFixer(Fixer):
             commands=commands,
             warnings=warnings,
             env_updates=dict(setup.env_updates),
-            resolved_without_rerun=resolved_without_rerun,
+            resolved_without_rerun=False,
         )
 
 
