@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -10,6 +11,7 @@ from app.models import ActivityEvent
 from app.utils.activity import (
     ActivityEntry,
     ActivityManager,
+    _serialise_details,
     record_worker_started,
 )
 from app.utils.events import WORKER_RESTARTED
@@ -203,3 +205,23 @@ def test_record_worker_started_enriches_previous_status(monkeypatch: pytest.Monk
     assert stored.details["worker"] == "worker-1"
     assert stored.details["previous_status"] == "stopped"
     assert response_cache.calls == [("/activity", "activity_updated")]
+
+
+def test_serialise_details_handles_set_of_dataclasses() -> None:
+    @dataclass(frozen=True)
+    class Item:
+        label: str
+
+    result = _serialise_details({"items": {Item("b"), Item("a")}})
+
+    assert result == {"items": [{"label": "a"}, {"label": "b"}]}
+
+
+def test_serialise_details_handles_set_with_mixed_types() -> None:
+    @dataclass(frozen=True)
+    class Entry:
+        value: str
+
+    result = _serialise_details({"items": {Entry("b"), 2, Entry("a")}})
+
+    assert result["items"] == [{"value": "a"}, {"value": "b"}, 2]

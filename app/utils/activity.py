@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import builtins
+import json
 from collections import OrderedDict, deque
 from collections.abc import Iterable, MutableMapping
 from dataclasses import asdict, dataclass, field, is_dataclass
@@ -321,7 +322,11 @@ def _serialise_details(
         if isinstance(value, list | tuple):
             return [_convert(item) for item in value]
         if isinstance(value, set):
-            return sorted(_convert(item) for item in value)
+            converted = [_convert(item) for item in value]
+            try:
+                return sorted(converted)
+            except TypeError:
+                return sorted(converted, key=_set_sort_key)
         if isinstance(value, datetime):
             return _timestamp_to_utc_isoformat(value)
         if is_dataclass(value) and not isinstance(value, type):
@@ -334,6 +339,28 @@ def _serialise_details(
     if not details:
         return {}
     return {str(key): _convert(val) for key, val in details.items()}
+
+
+def _set_sort_key(value: Any) -> tuple[str, object]:
+    """Return a deterministic sort key for set members.
+
+    Falls back to JSON serialisation when natural ordering is unavailable to
+    ensure a stable ordering for complex structures such as dicts.
+    """
+
+    type_name = type(value).__qualname__
+    if isinstance(value, (int, float, str)):
+        return type_name, value
+    try:
+        serialised = json.dumps(
+            value,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+    except TypeError:
+        serialised = repr(value)
+    return type_name, serialised
 
 
 activity_manager = ActivityManager()
