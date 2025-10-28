@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Mapping
 import inspect
+from typing import Final
 
 from app.config import AppConfig
 from app.core.spotify_client import SpotifyClient
@@ -18,6 +19,11 @@ logger = get_logger(__name__)
 
 
 _ShutdownCallback = Callable[[], Awaitable[None] | None]
+
+
+_PROVIDER_ALIASES: Final[dict[str, str]] = {
+    "soulseek": "slskd",
+}
 
 
 class _AdapterShutdownManager:
@@ -87,12 +93,26 @@ class ProviderRegistry:
             return
         enabled = OrderedDict.fromkeys(self.enabled_names)
         for name in enabled:
-            provider = self._build_track_provider(name)
+            normalized = name.lower()
+            canonical_key = self._canonical_name_for(normalized)
+            provider = self._providers.get(canonical_key)
+            policy = self._policies.get(canonical_key)
             if provider is None:
-                continue
-            self._providers[provider.name] = provider
-            self._policies[provider.name] = self._policy_for(provider.name)
-            self._register_shutdown_callback(provider)
+                provider = self._build_track_provider(normalized)
+                if provider is None:
+                    continue
+                canonical_key = provider.name
+                policy = self._policy_for(canonical_key)
+                self._providers[canonical_key] = provider
+                self._policies[canonical_key] = policy
+                self._register_shutdown_callback(provider)
+            elif policy is None:
+                policy = self._policy_for(canonical_key)
+                self._policies[canonical_key] = policy
+
+            self._providers[normalized] = provider
+            if policy is not None:
+                self._policies[normalized] = policy
         self._initialised = True
 
     def _build_track_provider(self, name: str) -> TrackProvider | None:
@@ -142,9 +162,22 @@ class ProviderRegistry:
         if not self._initialised:
             self.initialise()
         normalized = name.lower()
-        if normalized not in self._providers:
+        provider = self._providers.get(normalized)
+        if provider is not None:
+            return provider
+
+        canonical = self._canonical_name_for(normalized)
+        provider = self._providers.get(canonical)
+        if provider is None:
             raise KeyError(f"Track provider {name!r} is not enabled")
-        return self._providers[normalized]
+
+        self._providers[normalized] = provider
+        policy = self._policies.get(canonical)
+        if policy is None:
+            policy = self._policy_for(canonical)
+            self._policies[canonical] = policy
+        self._policies[normalized] = policy
+        return provider
 
     async def shutdown(self) -> None:
         """Close all registered providers, ignoring repeated calls."""
@@ -160,6 +193,10 @@ class ProviderRegistry:
             return close_callable()
 
         self._shutdown_manager.register(provider.name, _callback)
+
+    def _canonical_name_for(self, name: str) -> str:
+        normalized = name.lower()
+        return _PROVIDER_ALIASES.get(normalized, normalized)
 
 
 __all__ = ["ProviderRegistry"]
