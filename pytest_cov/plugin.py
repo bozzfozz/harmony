@@ -9,7 +9,6 @@ from pathlib import Path
 import sys
 import threading
 import time
-import trace
 import types
 from typing import cast
 from xml.etree import ElementTree as ET
@@ -80,9 +79,12 @@ class HarmonyCoveragePlugin:
         self._reports = self._parse_reports()
         self._target_files = self._resolve_target_files()
         self._enabled = bool(self._target_files)
-        self._tracer: trace.Trace | None = None
         self._previous_sys_trace: types.TraceFunction | None = None
         self._previous_thread_trace: types.TraceFunction | None = None
+        self._trace_function: types.TraceFunction | None = None
+        self._execution_counts: dict[Path, dict[int, int]] | None = None
+        self._resolution_cache: dict[str, Path | None] = {}
+        self._target_lookup: dict[Path, Path] = {path: path for path in self._target_files}
         self._data: list[FileCoverage] | None = None
 
         if self._targets and not self._target_files:
@@ -163,26 +165,31 @@ class HarmonyCoveragePlugin:
     def pytest_sessionstart(self, session: pytest.Session) -> None:  # noqa: D401 - pytest hook
         if not self._enabled:
             return
-        tracer = trace.Trace(count=True, trace=False)
-        self._tracer = tracer
-        tracefunc = tracer.globaltrace
+        self._execution_counts = {path: {} for path in self._target_files}
+        self._resolution_cache = {}
+        self._trace_function = self._create_tracer()
         self._previous_sys_trace = sys.gettrace()
         self._previous_thread_trace = threading.gettrace()
-        sys.settrace(tracefunc)
-        threading.settrace(tracefunc)
+        sys.settrace(self._trace_function)
+        threading.settrace(self._trace_function)
 
     @pytest.hookimpl
     def pytest_sessionfinish(self, session: pytest.Session, exitstatus: int) -> None:  # noqa: D401 - pytest hook
-        if not self._enabled or self._tracer is None:
+        if not self._enabled or self._trace_function is None:
             return
         sys.settrace(self._previous_sys_trace)
         threading.settrace(self._previous_thread_trace)
-        results = self._tracer.results()
-        counts = results.counts
+        counts: dict[tuple[str, int], int] = {}
+        if self._execution_counts is not None:
+            for path, executed in self._execution_counts.items():
+                for lineno, hits in executed.items():
+                    counts[(str(path), lineno)] = hits
         coverage = self._build_reports(counts)
         self._data = coverage
         if self._reports.xml_path is not None:
             self._write_xml_report(coverage, self._reports.xml_path)
+        self._trace_function = None
+        self._execution_counts = None
 
     def _build_reports(self, counts: dict[tuple[str, int], int]) -> list[FileCoverage]:
         if not self._target_files:
@@ -194,17 +201,18 @@ class HarmonyCoveragePlugin:
 
         for (filename, lineno), hits in counts.items():
             cached = resolution_cache.get(filename)
-            if cached is None and filename in resolution_cache:
-                continue
-            if cached is None:
+            if cached is not None or filename in resolution_cache:
+                resolved = cached
+            else:
                 try:
                     resolved = Path(filename).resolve()
                 except OSError:
                     resolution_cache[filename] = None
                     continue
                 resolution_cache[filename] = resolved
-            else:
-                resolved = cached
+
+            if resolved is None:
+                continue
 
             target = target_lookup.get(resolved)
             if target is None:
@@ -224,6 +232,45 @@ class HarmonyCoveragePlugin:
                 )
             )
         return sorted(reports, key=lambda item: item.relative.as_posix())
+
+    def _create_tracer(self) -> types.TraceFunction:
+        assert self._execution_counts is not None
+
+        execution = self._execution_counts
+        target_lookup = self._target_lookup
+        resolution_cache = self._resolution_cache
+
+        def _resolve(filename: str) -> Path | None:
+            cached = resolution_cache.get(filename)
+            if cached is not None or filename in resolution_cache:
+                return cached
+            try:
+                resolved = Path(filename).resolve()
+            except OSError:
+                resolution_cache[filename] = None
+                return None
+            if resolved in target_lookup:
+                resolution_cache[filename] = resolved
+                return resolved
+            resolution_cache[filename] = None
+            return None
+
+        def _trace(frame: types.FrameType, event: str, arg: object) -> types.TraceFunction | None:
+            if event not in {"call", "line"}:
+                return _trace
+            filename = frame.f_code.co_filename
+            if not filename or filename.startswith("<"):
+                return None
+            resolved = _resolve(filename)
+            if resolved is None:
+                return None
+            if event == "line":
+                file_counts = execution[resolved]
+                lineno = int(frame.f_lineno)
+                file_counts[lineno] = file_counts.get(lineno, 0) + 1
+            return _trace
+
+        return _trace
 
     def _statement_lines(self, path: Path) -> set[int]:
         try:
