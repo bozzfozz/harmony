@@ -88,7 +88,14 @@ def ensure_default_settings(defaults: Mapping[str, str]) -> None:
 
 
 def increment_counter(key: str, *, amount: int = 1) -> int:
-    """Increment an integer counter stored as a setting and return the new value."""
+    """Increment an integer counter stored as a setting and return the new value.
+
+    Passing ``amount=0`` acts as a read-only operation: the existing counter value
+    is returned without mutating the backing row.  This is useful for callers that
+    want to inspect a counter atomically while leaving the persisted state
+    untouched and, importantly, avoids creating a new row when no counter exists
+    yet.
+    """
 
     if amount == 0:
         current = _parse_counter_value(read_setting(key))
