@@ -26,7 +26,7 @@ def monotonic_ms() -> int:
 
 
 async def sleep_jitter_ms(ms: int, jitter_pct: int) -> float:
-    """Sleep for ``ms`` milliseconds, applying +/- jitter percentage."""
+    """Sleep for ``ms`` milliseconds with +/- jitter and return milliseconds slept."""
 
     delay_ms = max(0, int(ms))
     pct = max(0, int(jitter_pct))
@@ -41,4 +41,4 @@ async def sleep_jitter_ms(ms: int, jitter_pct: int) -> float:
         await asyncio.sleep(seconds)
     else:  # pragma: no cover - zero path
         await asyncio.sleep(0)
-    return seconds
+    return actual_ms
