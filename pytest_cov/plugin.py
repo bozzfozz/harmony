@@ -188,9 +188,7 @@ class HarmonyCoveragePlugin:
         if not self._target_files:
             return []
 
-        execution_by_path: dict[Path, dict[int, int]] = {
-            path: {} for path in self._target_files
-        }
+        execution_by_path: dict[Path, dict[int, int]] = {path: {} for path in self._target_files}
         resolution_cache: dict[str, Path | None] = {}
         target_lookup = {path: path for path in self._target_files}
 
