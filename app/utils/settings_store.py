@@ -11,6 +11,20 @@ from app.db import session_scope
 from app.models import Setting
 
 
+def _parse_counter_value(value: str | None) -> int | None:
+    """Return an integer representation of a stored counter value."""
+
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
 def write_setting(key: str, value: str) -> None:
     """Persist a string value to the settings table."""
 
@@ -77,8 +91,8 @@ def increment_counter(key: str, *, amount: int = 1) -> int:
     """Increment an integer counter stored as a setting and return the new value."""
 
     if amount == 0:
-        current = read_setting(key)
-        return int(current) if current and current.isdigit() else 0
+        current = _parse_counter_value(read_setting(key))
+        return current if current is not None else 0
 
     with session_scope() as session:
         setting = session.execute(select(Setting).where(Setting.key == key)).scalar_one_or_none()
@@ -95,9 +109,8 @@ def increment_counter(key: str, *, amount: int = 1) -> int:
             )
             return new_value
 
-        try:
-            current_value = int(setting.value or 0)
-        except (TypeError, ValueError):
+        current_value = _parse_counter_value(setting.value)
+        if current_value is None:
             current_value = 0
 
         new_value = current_value + amount
