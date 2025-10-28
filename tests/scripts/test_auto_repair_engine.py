@@ -2,13 +2,26 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from types import SimpleNamespace
+
+import pathlib
 
 import pytest
 
 import scripts.auto_repair.engine as auto_repair_engine
 from scripts.dev import pytest_env
+
+
+@pytest.fixture(autouse=True)
+def isolate_summary_path(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
+    """Ensure tests do not mutate the repository summary file."""
+
+    summary_path = tmp_path / "auto_repair_summary.md"
+    monkeypatch.setattr(auto_repair_engine, "SUMMARY_PATH", summary_path)
+    yield
 
 
 def _prepare_env(monkeypatch: pytest.MonkeyPatch, overrides: Mapping[str, str]) -> None:
