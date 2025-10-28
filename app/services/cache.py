@@ -210,7 +210,8 @@ class ResponseCache:
     ) -> int:
         normalized = self._normalize_path(path)
         method_key = method.upper()
-        prefix = f"{method_key}:{normalized}"
+        base_prefix = f"{method_key}:{normalized}"
+        delimited_prefix = f"{base_prefix}:"
         try:
             async with self._lock:
                 keys_to_remove: list[str] = []
@@ -218,7 +219,11 @@ class ResponseCache:
                 for key, entry in self._cache.items():
                     if not key.startswith(method_key):
                         continue
-                    if key.startswith(prefix) or self._path_matches_entry(normalized, entry):
+                    if (
+                        key == base_prefix
+                        or key.startswith(delimited_prefix)
+                        or self._path_matches_entry(normalized, entry)
+                    ):
                         keys_to_remove.append(key)
                 for key in keys_to_remove:
                     removed = self._cache.pop(key, None)
@@ -227,14 +232,14 @@ class ResponseCache:
                 count = len(removed_entries)
         except Exception:
             if self._fail_open:
-                self._log_operation("error", "error", key_hash=prefix)
+                self._log_operation("error", "error", key_hash=base_prefix)
                 return 0
             raise
 
         operation = "evict" if any((reason, entity_id)) else "invalidate"
         status = "evicted" if count else "noop"
         fields: dict[str, object] = {
-            "key_hash": prefix,
+            "key_hash": base_prefix,
             "count": count,
             "path": normalized,
         }

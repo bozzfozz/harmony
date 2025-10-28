@@ -170,6 +170,22 @@ def test_invalidate_path_supports_template_matching(stub_clock: StubClock) -> No
     asyncio.run(run())
 
 
+def test_invalidate_path_preserves_similar_prefixes(stub_clock: StubClock) -> None:
+    cache = make_cache(stub_clock)
+
+    async def run() -> None:
+        await cache.set("GET:/artists/123:meta", make_entry("/artists/123"))
+        await cache.set("GET:/artists/1234:meta", make_entry("/artists/1234"))
+
+        removed = await cache.invalidate_path("/artists/123", method="GET")
+
+        assert removed == 1
+        assert "GET:/artists/123:meta" not in cache._cache
+        assert "GET:/artists/1234:meta" in cache._cache
+
+    asyncio.run(run())
+
+
 def test_invalidate_pattern_uses_regex_matching(stub_clock: StubClock) -> None:
     cache = make_cache(stub_clock)
 
