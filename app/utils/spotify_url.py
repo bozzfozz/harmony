@@ -52,7 +52,8 @@ def parse_playlist_id(
     parsed = urlparse(candidate)
     if parsed.scheme not in {"http", "https"}:
         return None
-    if parsed.netloc.lower() != _ALLOWED_HOST:
+    host = parsed.hostname
+    if host is None or host.lower() != _ALLOWED_HOST:
         return None
 
     segments = [segment for segment in parsed.path.split("/") if segment]
