@@ -289,6 +289,7 @@ class PytestCovFixer(Fixer):
 
         warnings = [] if setup.installed else ["Install pytest-cov manually and re-run tests"]
         commands = [command_display] if setup.command else []
+        resolved_without_rerun = setup.command is None and not setup.env_updates
         return FixOutcome(
             issue_id=self.issue_id,
             description=self.description,
@@ -296,7 +297,8 @@ class PytestCovFixer(Fixer):
             message=setup.message,
             commands=commands,
             warnings=warnings,
-            resolved_without_rerun=setup.command is None,
+            env_updates=dict(setup.env_updates),
+            resolved_without_rerun=resolved_without_rerun,
         )
 
 
@@ -356,6 +358,7 @@ class AutoRepairEngine:
         if stage.name == "test":
             setup = pytest_env.ensure_pytest_cov(os.getenv("PYTEST_ADDOPTS"))
             command_display = " ".join(setup.command) if setup.command else None
+            env_overrides.update(setup.env_updates)
             if setup.command:
                 self._logger.emit(
                     step="SETUP",
