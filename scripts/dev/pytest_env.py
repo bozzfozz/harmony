@@ -54,6 +54,19 @@ def _ensure_repo_on_syspath() -> None:
         sys.path.insert(0, repo_path)
 
 
+def _pythonpath_with_repo(existing: str | None) -> str | None:
+    """Return a PYTHONPATH string that ensures the repo is importable."""
+
+    repo_path = str(REPO_ROOT)
+    if not existing:
+        return repo_path
+
+    entries = [entry for entry in existing.split(os.pathsep) if entry]
+    if repo_path in entries:
+        return None
+    return os.pathsep.join([repo_path, existing])
+
+
 def _inject_plugin_flag(pytest_addopts: str) -> tuple[str, bool]:
     """Ensure the built-in coverage plugin is explicitly loaded via -p."""
 
@@ -149,6 +162,9 @@ def ensure_pytest_cov(pytest_addopts: str | None = None) -> PytestCovSetupResult
         updated_addopts, mutated = _inject_plugin_flag(addopts)
         if mutated:
             env_updates["PYTEST_ADDOPTS"] = updated_addopts
+        pythonpath_update = _pythonpath_with_repo(os.getenv("PYTHONPATH"))
+        if pythonpath_update is not None:
+            env_updates["PYTHONPATH"] = pythonpath_update
         return PytestCovSetupResult(
             required=True,
             installed=True,
@@ -171,6 +187,9 @@ def ensure_pytest_cov(pytest_addopts: str | None = None) -> PytestCovSetupResult
             updated_addopts, mutated = _inject_plugin_flag(addopts)
             if mutated:
                 env_updates["PYTEST_ADDOPTS"] = updated_addopts
+            pythonpath_update = _pythonpath_with_repo(os.getenv("PYTHONPATH"))
+            if pythonpath_update is not None:
+                env_updates["PYTHONPATH"] = pythonpath_update
             return PytestCovSetupResult(
                 required=True,
                 installed=True,

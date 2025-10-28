@@ -45,13 +45,16 @@ def test_ensure_pytest_cov_installs_when_missing(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(pytest_env.subprocess, "run", _fake_run)
 
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+
     result = pytest_env.ensure_pytest_cov(pytest_addopts="--cov=app")
 
     assert result.required is True
     assert result.installed is True
     assert result.command == ("pip", "install", "pytest-cov==4.1.0")
     assert result.message == "Installed pytest-cov"
-    assert result.env_updates == {"PYTEST_ADDOPTS": "--cov=app -p pytest_cov.plugin"}
+    assert result.env_updates["PYTEST_ADDOPTS"] == "--cov=app -p pytest_cov.plugin"
+    assert result.env_updates["PYTHONPATH"] == str(pytest_env.REPO_ROOT)
 
 
 def test_ensure_pytest_cov_reports_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -104,6 +107,8 @@ def test_ensure_pytest_cov_uses_builtin_package(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(pytest_env.importlib, "import_module", _import)
     monkeypatch.setattr(pytest_env.subprocess, "run", _fail_run)
 
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+
     result = pytest_env.ensure_pytest_cov(pytest_addopts="--cov=app")
 
     assert result.required is True
@@ -111,11 +116,13 @@ def test_ensure_pytest_cov_uses_builtin_package(monkeypatch: pytest.MonkeyPatch)
     assert result.command is None
     assert result.message == "pytest-cov already available"
     assert repo_path in sys.path
-    assert result.env_updates == {"PYTEST_ADDOPTS": "--cov=app -p pytest_cov.plugin"}
+    assert result.env_updates["PYTEST_ADDOPTS"] == "--cov=app -p pytest_cov.plugin"
+    assert result.env_updates["PYTHONPATH"].startswith(repo_path)
 
 
 def test_ensure_pytest_cov_does_not_duplicate_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PYTEST_ADDOPTS", "--cov=app -p pytest_cov.plugin")
+    monkeypatch.setenv("PYTHONPATH", str(pytest_env.REPO_ROOT))
 
     result = pytest_env.ensure_pytest_cov(pytest_addopts=None)
 
