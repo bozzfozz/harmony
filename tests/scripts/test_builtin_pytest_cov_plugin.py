@@ -75,6 +75,4 @@ def test_dummy() -> None:
 
     result = pytester.runpytest("--cov=does_not_exist")
     assert result.ret != 0
-    result.stderr.fnmatch_lines(
-        ["*No Python files found for --cov target(s): does_not_exist*"]
-    )
+    result.stderr.fnmatch_lines(["*No Python files found for --cov target(s): does_not_exist*"])

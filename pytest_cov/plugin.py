@@ -218,8 +218,7 @@ class HarmonyCoveragePlugin:
             percent = 100.0 * report.coverage_ratio
             missed = report.total - report.covered
             summary = (
-                f"{report.relative.as_posix():<50} "
-                f"{report.total:>6} {missed:>6} {percent:>5.1f}%"
+                f"{report.relative.as_posix():<50} {report.total:>6} {missed:>6} {percent:>5.1f}%"
             )
             terminalreporter.write_line(summary)
             if self._reports.term_missing and report.missed:
@@ -227,9 +226,7 @@ class HarmonyCoveragePlugin:
                 terminalreporter.write_line(f"  Missing: {missing}")
         overall = 100.0 if total_statements == 0 else (100.0 * total_covered / total_statements)
         overall_missed = total_statements - total_covered
-        total_line = (
-            f"{'TOTAL':<50} {total_statements:>6} {overall_missed:>6} {overall:>5.1f}%"
-        )
+        total_line = f"{'TOTAL':<50} {total_statements:>6} {overall_missed:>6} {overall:>5.1f}%"
         terminalreporter.write_line(total_line)
 
     def _write_xml_report(self, reports: list[FileCoverage], destination: Path) -> None:
