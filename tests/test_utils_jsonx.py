@@ -29,7 +29,7 @@ def test_safe_loads_rejects_blank_byte_sequences(
 def test_safe_dumps_serialises_sets_as_lists() -> None:
     payload = {"values": {3, 1, 2}}
     data = jsonx.safe_dumps(payload)
-    assert data == "{\"values\":[1,2,3]}"
+    assert data == '{"values":[1,2,3]}'
     assert jsonx.safe_loads(data) == {"values": [1, 2, 3]}
 
 
