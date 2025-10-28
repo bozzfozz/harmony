@@ -24,3 +24,22 @@ def test_safe_loads_rejects_blank_byte_sequences(
 ) -> None:
     with pytest.raises(ValueError):
         jsonx.safe_loads(data)
+
+
+def test_safe_dumps_serialises_sets_as_lists() -> None:
+    payload = {"values": {3, 1, 2}}
+    data = jsonx.safe_dumps(payload)
+    assert data == "{\"values\":[1,2,3]}"
+    assert jsonx.safe_loads(data) == {"values": [1, 2, 3]}
+
+
+def test_safe_dumps_handles_frozenset() -> None:
+    payload = {"values": frozenset({"b", "a"})}
+    data = jsonx.safe_dumps(payload)
+    assert jsonx.safe_loads(data) == {"values": ["a", "b"]}
+
+
+def test_safe_dumps_handles_dict_keys_view() -> None:
+    mapping = {"b": 1, "a": 2}
+    data = jsonx.safe_dumps({"keys": mapping.keys()})
+    assert jsonx.safe_loads(data) == {"keys": ["a", "b"]}
