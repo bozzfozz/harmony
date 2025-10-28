@@ -222,14 +222,18 @@ def rate_limit_meta(
 
     if not headers:
         return None, {}
-    retry_after = headers.get("Retry-After")
+    retry_after: Any | None = None
+    for name, value in headers.items():
+        if isinstance(name, str) and name.lower() == "retry-after":
+            retry_after = value
+            break
     retry_after_ms = _parse_retry_after(retry_after)
     meta: dict[str, Any] | None = None
     if retry_after_ms is not None:
         meta = {"retry_after_ms": retry_after_ms}
     response_headers: dict[str, str] = {}
-    if retry_after:
-        response_headers["Retry-After"] = retry_after
+    if retry_after is not None and retry_after != "":
+        response_headers["Retry-After"] = str(retry_after)
     return meta, response_headers
 
 
