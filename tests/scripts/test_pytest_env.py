@@ -17,6 +17,7 @@ def test_ensure_pytest_cov_no_flags(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.required is False
     assert result.installed is True
     assert result.command is None
+    assert result.env_updates == {}
 
 
 def test_ensure_pytest_cov_installs_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -50,6 +51,7 @@ def test_ensure_pytest_cov_installs_when_missing(monkeypatch: pytest.MonkeyPatch
     assert result.installed is True
     assert result.command == ("pip", "install", "pytest-cov==4.1.0")
     assert result.message == "Installed pytest-cov"
+    assert result.env_updates == {"PYTEST_ADDOPTS": "--cov=app -p pytest_cov.plugin"}
 
 
 def test_ensure_pytest_cov_reports_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -73,6 +75,7 @@ def test_ensure_pytest_cov_reports_failure(monkeypatch: pytest.MonkeyPatch) -> N
     assert result.installed is False
     assert result.command == ("pip", "install", "pytest-cov")
     assert "network down" in result.message
+    assert result.env_updates == {}
 
 
 def test_ensure_pytest_cov_uses_builtin_package(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -108,3 +111,14 @@ def test_ensure_pytest_cov_uses_builtin_package(monkeypatch: pytest.MonkeyPatch)
     assert result.command is None
     assert result.message == "pytest-cov already available"
     assert repo_path in sys.path
+    assert result.env_updates == {"PYTEST_ADDOPTS": "--cov=app -p pytest_cov.plugin"}
+
+
+def test_ensure_pytest_cov_does_not_duplicate_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PYTEST_ADDOPTS", "--cov=app -p pytest_cov.plugin")
+
+    result = pytest_env.ensure_pytest_cov(pytest_addopts=None)
+
+    assert result.required is True
+    assert result.installed is True
+    assert result.env_updates == {}

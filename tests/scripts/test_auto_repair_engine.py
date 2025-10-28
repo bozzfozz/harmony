@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from types import SimpleNamespace
 
 import pytest
 
@@ -74,6 +75,7 @@ def test_pytest_cov_fixer_installs_plugin(monkeypatch: pytest.MonkeyPatch) -> No
             installed=True,
             command=("pip", "install", "pytest-cov==4.1.0"),
             message="Installed pytest-cov",
+            env_updates={"PYTEST_ADDOPTS": "--cov=app -p pytest_cov.plugin"},
         )
 
     monkeypatch.setattr(auto_repair_engine.pytest_env, "ensure_pytest_cov", _patched_ensure)
@@ -97,6 +99,7 @@ def test_pytest_cov_fixer_reports_failure(monkeypatch: pytest.MonkeyPatch) -> No
             installed=False,
             command=("pip", "install", "pytest-cov"),
             message="error: network down",
+            env_updates={},
         )
 
     monkeypatch.setattr(auto_repair_engine.pytest_env, "ensure_pytest_cov", _patched_ensure)
@@ -131,6 +134,7 @@ def test_engine_aborts_when_pytest_cov_setup_fails(monkeypatch: pytest.MonkeyPat
         installed=False,
         command=("pip", "install", "pytest-cov"),
         message="network down",
+        env_updates={},
     )
 
     monkeypatch.setattr(auto_repair_engine.pytest_env, "ensure_pytest_cov", lambda _: failure)
@@ -138,3 +142,39 @@ def test_engine_aborts_when_pytest_cov_setup_fails(monkeypatch: pytest.MonkeyPat
     exit_code = engine.run("test")
 
     assert exit_code == 1
+
+
+def test_engine_applies_pytest_cov_env_updates(monkeypatch: pytest.MonkeyPatch) -> None:
+    stage = auto_repair_engine.RepairStage(
+        name="test",
+        commands=(auto_repair_engine.RepairCommand(name="pytest", argv=("pytest",)),),
+    )
+    engine = auto_repair_engine.AutoRepairEngine(
+        stages={"test": stage},
+        fixers=(),
+        max_iters=1,
+        logger=_SilentLogger(),
+    )
+
+    recorded: dict[str, object] = {}
+
+    def _fake_run(argv, *, cwd, env, capture_output, text, check):  # type: ignore[override]
+        recorded["env"] = env
+        recorded["argv"] = argv
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(auto_repair_engine.subprocess, "run", _fake_run)
+
+    setup = pytest_env.PytestCovSetupResult(
+        required=True,
+        installed=True,
+        command=None,
+        message="built-in",
+        env_updates={"PYTEST_ADDOPTS": "--cov=app -p pytest_cov.plugin"},
+    )
+    monkeypatch.setattr(auto_repair_engine.pytest_env, "ensure_pytest_cov", lambda _: setup)
+
+    exit_code = engine.run("test")
+
+    assert exit_code == 0
+    assert recorded["env"]["PYTEST_ADDOPTS"] == "--cov=app -p pytest_cov.plugin"
