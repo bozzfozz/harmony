@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import ast
+from dataclasses import dataclass
 import os
+from pathlib import Path
 import sys
 import threading
 import time
 import trace
 import types
-import typing
-from dataclasses import dataclass
-from pathlib import Path
+from typing import cast
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -208,23 +208,29 @@ class HarmonyCoveragePlugin:
         if not self._enabled or not self._reports.term or not self._data:
             return
         terminalreporter.write_sep("-", "coverage summary")
-        terminalreporter.write_line(f"{'Name':<50} {'Stmts':>6} {'Miss':>6} {'Cover':>6}")
+        header = f"{'Name':<50} {'Stmts':>6} {'Miss':>6} {'Cover':>6}"
+        terminalreporter.write_line(header)
         total_statements = 0
         total_covered = 0
         for report in self._data:
             total_statements += report.total
             total_covered += report.covered
             percent = 100.0 * report.coverage_ratio
-            terminalreporter.write_line(
-                f"{report.relative.as_posix():<50} {report.total:>6} {report.total - report.covered:>6} {percent:>5.1f}%"
+            missed = report.total - report.covered
+            summary = (
+                f"{report.relative.as_posix():<50} "
+                f"{report.total:>6} {missed:>6} {percent:>5.1f}%"
             )
+            terminalreporter.write_line(summary)
             if self._reports.term_missing and report.missed:
                 missing = ",".join(str(num) for num in report.missed)
                 terminalreporter.write_line(f"  Missing: {missing}")
         overall = 100.0 if total_statements == 0 else (100.0 * total_covered / total_statements)
-        terminalreporter.write_line(
-            f"{'TOTAL':<50} {total_statements:>6} {total_statements - total_covered:>6} {overall:>5.1f}%"
+        overall_missed = total_statements - total_covered
+        total_line = (
+            f"{'TOTAL':<50} {total_statements:>6} {overall_missed:>6} {overall:>5.1f}%"
         )
+        terminalreporter.write_line(total_line)
 
     def _write_xml_report(self, reports: list[FileCoverage], destination: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -288,7 +294,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 def pytest_unconfigure(config: pytest.Config) -> None:
-    plugin = typing.cast(
+    plugin = cast(
         HarmonyCoveragePlugin | None, config.pluginmanager.get_plugin("harmony_simple_cov")
     )
     if plugin is not None:
