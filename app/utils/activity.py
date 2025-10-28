@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import builtins
-import json
 from collections import OrderedDict, deque
 from collections.abc import Iterable, MutableMapping
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import UTC, datetime
+import json
 from threading import Lock
 from typing import (
     TYPE_CHECKING,
@@ -349,7 +349,7 @@ def _set_sort_key(value: Any) -> tuple[str, object]:
     """
 
     type_name = type(value).__qualname__
-    if isinstance(value, (int, float, str)):
+    if isinstance(value, int | float | str):
         return type_name, value
     try:
         serialised = json.dumps(
