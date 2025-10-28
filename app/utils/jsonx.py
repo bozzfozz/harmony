@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Set as AbstractSet
 import json
 from typing import Any
 
@@ -10,7 +11,35 @@ _BUFFER_TYPES = (bytes, bytearray, memoryview)
 __all__ = ["safe_dumps", "safe_loads", "try_parse_json_or_none"]
 
 
-def _default(value: Any) -> str:
+def _sort_key_for_set(value: Any) -> tuple[str, str]:
+    """Return a deterministic sort key for set members."""
+
+    type_name = type(value).__qualname__
+    try:
+        # Serialise using the same rules as ``safe_dumps`` to ensure nested
+        # structures (e.g. sets within sets) are handled consistently.
+        serialised = json.dumps(
+            value,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+            default=_default,
+        )
+    except TypeError:
+        serialised = repr(value)
+    return type_name, serialised
+
+
+def _normalise_set(value: AbstractSet[Any]) -> list[Any]:
+    try:
+        return sorted(value)
+    except TypeError:
+        return sorted(value, key=_sort_key_for_set)
+
+
+def _default(value: Any) -> Any:
+    if isinstance(value, AbstractSet):
+        return _normalise_set(value)
     return str(value)
 
 
