@@ -53,7 +53,7 @@ class _ValidatedString(str):
     def _coerce(cls, value: Any) -> str:
         if isinstance(value, str):
             return value
-        if isinstance(value, (bytes, bytearray)):
+        if isinstance(value, bytes | bytearray):
             return value.decode()
         raise TypeError(cls._type_error_message)
 

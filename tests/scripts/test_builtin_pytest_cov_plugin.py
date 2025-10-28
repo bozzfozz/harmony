@@ -5,7 +5,6 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-
 pytest_plugins = ("pytester",)
 
 
