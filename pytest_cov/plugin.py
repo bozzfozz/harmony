@@ -126,8 +126,28 @@ class HarmonyCoveragePlugin:
 
     def _interpret_target(self, token: str) -> list[Path]:
         """Yield file paths for a coverage token."""
-        normalized = token.replace(".", os.sep)
-        candidate = (self._root / normalized).resolve()
+
+        spec = (token or "").strip()
+        if not spec:
+            return []
+
+        raw_path = Path(spec)
+        candidate: Path
+
+        def _has_path_separator(value: str) -> bool:
+            seps = {os.sep}
+            if os.altsep:
+                seps.add(os.altsep)
+            return any(separator in value for separator in seps)
+
+        if raw_path.is_absolute():
+            candidate = raw_path
+        elif spec.startswith(".") or _has_path_separator(spec):
+            candidate = (self._root / raw_path).resolve()
+        else:
+            module_path = spec.replace(".", os.sep)
+            candidate = (self._root / module_path).resolve()
+
         candidates: list[Path] = []
         if candidate.is_dir():
             candidates.extend(path for path in candidate.rglob("*.py") if path.is_file())

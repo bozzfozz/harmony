@@ -4,6 +4,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 import pytest
+from pytest_cov.plugin import HarmonyCoveragePlugin
 
 pytest_plugins = ("pytester",)
 
@@ -76,3 +77,30 @@ def test_dummy() -> None:
     result = pytester.runpytest("--cov=does_not_exist")
     assert result.ret != 0
     result.stderr.fnmatch_lines(["*No Python files found for --cov target(s): does_not_exist*"])
+
+
+def test_builtin_pytest_cov_dot_target_scopes_to_repo(tmp_path: Path) -> None:
+    root = tmp_path / "workspace"
+    root.mkdir()
+    package = root / "pkg"
+    package.mkdir()
+    (package / "__init__.py").write_text("\n", encoding="utf-8")
+    module = package / "module.py"
+    module.write_text("VALUE = 1\n", encoding="utf-8")
+
+    class _StubConfig:
+        def __init__(self, base: Path) -> None:
+            self.rootpath = base
+            self.pluginmanager = object()
+
+        def getoption(self, name: str) -> list[str]:
+            if name == "harmony_cov_targets":
+                return ["."]
+            if name == "harmony_cov_reports":
+                return []
+            raise AssertionError(f"unexpected option request: {name}")
+
+    plugin = HarmonyCoveragePlugin(_StubConfig(root))
+
+    assert plugin._target_files
+    assert all(path.is_relative_to(root) for path in plugin._target_files)
