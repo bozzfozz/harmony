@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
+from pathlib import Path
 import shlex
 import subprocess
 import sys
-from datetime import datetime, timezone
-from pathlib import Path
 
 SCRIPT_PATH = Path("scripts/dev/release_check.py")
 
@@ -28,8 +28,8 @@ def test_timestamps_are_emitted_in_utc() -> None:
     timestamp = _utc_now()
 
     assert timestamp.endswith("Z")
-    parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-    assert parsed.tzinfo == timezone.utc
+    parsed = dt.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    assert parsed.tzinfo == dt.UTC
 
 
 def test_dry_run_emits_plan_without_execution() -> None:
