@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from datetime import datetime
 import json
 import os
 import shlex
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Mapping, Sequence
 
 DEFAULT_TARGETS: tuple[str, ...] = (
     "all",
@@ -41,7 +41,7 @@ class ReleaseCheckError(RuntimeError):
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z")
 
 
 def _log_event(
