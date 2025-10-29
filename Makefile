@@ -52,11 +52,7 @@ all:
 		$(MAKE) smoke
 
 release-check:
-	@set -euo pipefail; \
-		$(MAKE) all; \
-		$(MAKE) docs-verify; \
-		$(MAKE) pip-audit; \
-		$(MAKE) ui-smoke
+	@python scripts/dev/release_check.py
 
 package-verify:
 	@python scripts/dev/package_verify.py

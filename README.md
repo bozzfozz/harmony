@@ -165,13 +165,18 @@ are introduced.
 
 ## Release gate
 
-Run `make release-check` before tagging or publishing a release. The target executes the
-full backend and UI gate (`make all`), verifies documentation references (`make
-docs-verify`), audits all `requirements*.txt` pins for known vulnerabilities via `make
-pip-audit`, and finishes with the UI smoke test. Ensure the
-[`pip-audit`](https://pypi.org/project/pip-audit/) CLI from
-`requirements-dev.txt` is installed and that network access is available so the security
-scan can complete without downgrading the gate.
+Run `make release-check` before tagging or publishing a release. The target now delegates
+to `scripts/dev/release_check.py`, which executes the full backend and UI gate (`make
+all`), verifies documentation references (`make docs-verify`), audits all
+`requirements*.txt` pins for known vulnerabilities via `make pip-audit`, and finishes
+with the UI smoke test. The script emits structured JSON logs and stops immediately after
+the first failing command to preserve the previous error context. Use `python
+scripts/dev/release_check.py --dry-run` to inspect the planned steps without executing
+them, or override the executed commands in CI with
+`RELEASE_CHECK_COMMANDS="<cmd1>\n<cmd2>"` for targeted verifications. Ensure the
+[`pip-audit`](https://pypi.org/project/pip-audit/) CLI from `requirements-dev.txt` is
+installed and that network access is available so the security scan can complete without
+downgrading the gate.
 
 When preparing the LinuxServer.io image, build it with `make image-lsio` and verify the
 runtime with `make smoke-lsio`. The smoke harness boots the freshly built container,
