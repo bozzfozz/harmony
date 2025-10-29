@@ -19,7 +19,7 @@ Harmony verlässt sich weiterhin auf nachvollziehbare lokale Gates. Ergänzend p
 | `make image-lsio`         | —                                   | Baut das LinuxServer.io-kompatible Image `lscr.io/linuxserver/harmony:latest` anhand von `docker/Dockerfile.lsio`. |
 | `make smoke-lsio`         | `scripts/dev/smoke_lsio.sh`         | Startet das LSIO-Image in einem temporären Container, wartet bis zu 60 Sekunden auf einen erfolgreichen Healthcheck gegen `http://127.0.0.1:${HARMONY_LSIO_SMOKE_PORT:-18080}/api/health/ready` und prüft anschließend, dass `/config/harmony.db` im Container sowie auf dem gemounteten Host-Pfad existiert. |
 | `make all`                | —                                   | Kombiniert `fmt lint dep-sync be-verify supply-guard smoke` in fester Reihenfolge (der `lint`-Schritt umfasst Ruff und MyPy). |
-| `make release-check`      | —                                   | Führt `make all`, anschließend `make docs-verify`, `make pip-audit` und `make ui-smoke` aus; dient als finales Release-Gate. |
+| `make release-check`      | `scripts/dev/release_check.py`      | Führt `make all`, `make docs-verify`, `make pip-audit` und `make ui-smoke` aus, protokolliert strukturierte JSON-Logs, stoppt beim ersten Fehler und unterstützt `--dry-run` sowie `RELEASE_CHECK_COMMANDS` für CI-Overrides. |
 
 **Hinweis:** MyPy ist jetzt ein Pflicht-Gate innerhalb von `make lint`. Schlägt die statische Typprüfung fehl oder fehlt das Tooling, wird der gesamte Lauf (und damit auch `make all` bzw. `make release-check`) mit einem Fehler abgebrochen.
 

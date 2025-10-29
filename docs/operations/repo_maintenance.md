@@ -10,7 +10,7 @@ Harmony nutzt den GitHub-Actions-Workflow [`backend-ci`](../../.github/workflows
 | `make ui-guard` | Verhindert Platzhalterstrings in Templates, blockiert `/api/...` HTMX-Aufrufe und stellt sicher, dass statische Assets vorhanden sind. |
 | `make ui-smoke` | Startet die App lokal und ruft `/live`, `/ui` sowie UI-Fragmente ab; schlägt fehl, wenn HTML-Antworten Platzhalter enthalten oder kein `text/html` liefern. |
 | `make all` | Führt Formatierung, Lint, Dependency-Sync, Backend-Tests, Supply-Guard und Smoke-Test aus. |
-| `make release-check` | Kombiniert `make all`, `make docs-verify`, `make pip-audit` sowie einen abschließenden `make ui-smoke` und dient als finales Release-Gate. |
+| `make release-check` | Ruft `scripts/dev/release_check.py` auf, kombiniert `make all`, `make docs-verify`, `make pip-audit` sowie einen abschließenden `make ui-smoke`, schreibt strukturierte Logs und stoppt beim ersten Fehler. Optional via `--dry-run` oder `RELEASE_CHECK_COMMANDS` parametrisierbar. |
 | `make image-lsio` / `make smoke-lsio` | Erstellt das LinuxServer.io-Image (`docker/Dockerfile.lsio`) und prüft es mit einem Healthcheck- und Datenbank-Bootstrap-Lauf. |
 | `pre-commit run --all-files` | Spiegelt alle Commit-Hooks (`ruff-format`, `ruff`, lokale Skripte). |
 | `pre-commit run --hook-stage push` | Führt `scripts/dev/test_py.sh` vor dem Push aus. |
