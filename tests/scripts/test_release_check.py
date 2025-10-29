@@ -5,6 +5,7 @@ import os
 import shlex
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 SCRIPT_PATH = Path("scripts/dev/release_check.py")
@@ -19,6 +20,16 @@ def _run_release_check(
 
 def _parse_logs(output: str) -> list[dict[str, object]]:
     return [json.loads(line) for line in output.splitlines() if line.strip()]
+
+
+def test_timestamps_are_emitted_in_utc() -> None:
+    from scripts.dev.release_check import _utc_now
+
+    timestamp = _utc_now()
+
+    assert timestamp.endswith("Z")
+    parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    assert parsed.tzinfo == timezone.utc
 
 
 def test_dry_run_emits_plan_without_execution() -> None:
