@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 import json
 import os
 import shlex
@@ -43,7 +43,7 @@ class ReleaseCheckError(RuntimeError):
 def _utc_now() -> str:
     """Return the current UTC timestamp in RFC 3339 format."""
 
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _log_event(
