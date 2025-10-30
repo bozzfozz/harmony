@@ -2,7 +2,7 @@
 
 ## Lokale Quality Gates
 
-Harmony nutzt den GitHub-Actions-Workflow [`backend-ci`](../../.github/workflows/ci.yml), der Formatierung, Linting, Typprüfungen, Pytests und Smoke-Checks sequenziell ausführt. Maintainer reproduzieren die einzelnen Läufe lokal und dokumentieren nachvollziehbare Logs als Ergänzung zu den CI-Artefakten.
+Harmony nutzt den GitHub-Actions-Workflow [`release-check`](../../.github/workflows/release-check.yml), der `make release-check` inklusive Formatierung, Linting, Typprüfungen, Tests, Smoke, Dokumentations-Guard, Security-Scan und UI-Smoketest ausführt. Das optionale [`docker-image`](../../.github/workflows/docker-image.yml) Workflow wiederholt denselben Gate-Lauf, bevor Container-Builds entstehen. Maintainer reproduzieren die einzelnen Läufe lokal und dokumentieren nachvollziehbare Logs als Ergänzung zu den CI-Artefakten.
 
 | Pflichtlauf | Zweck |
 | ------------ | ----- |
@@ -17,10 +17,10 @@ Harmony nutzt den GitHub-Actions-Workflow [`backend-ci`](../../.github/workflows
 
 ## Branch Protection & Evidence
 
-- Pull Requests benötigen einen erfolgreichen Durchlauf der Required-Status-Checks `backend-ci` **und** `release-check`.
+- Branch-Protection-Regeln verlangen einen erfolgreichen `release-check`-Status; zusätzliche Checks (z. B. `docker-image`) können je nach Repository-Einstellung erforderlich sein.
 - Der Workflow [`release-check`](../../.github/workflows/release-check.yml) läuft automatisch für Branches `release/**` sowie Tags `v*`, führt `make release-check` inklusive `docs-verify`, `pip-audit` und UI-Smoke-Test aus und validiert anschließend den Packaging-Pipeline-Run via `make package-verify`.
 - Die Workflow-Logs werden als Artefakt `release-check-logs` gespeichert und enthalten die Datei `reports/release-check/release-check.log` als revisionssicheren Nachweis. Zusätzlich archiviert der Workflow das Artefakt `release-packaging-artifacts` mit dem Inhalt des Verzeichnisses `dist/` für eine spätere manuelle Prüfung.
-- Maintainer prüfen die GitHub-Actions-Protokolle (`backend-ci`, `release-check`) sowie die angehängten Logs der lokalen Pflichtläufe, bevor sie freigeben.
+- Maintainer prüfen die GitHub-Actions-Protokolle (`release-check` und ggf. `docker-image`) sowie die angehängten Logs der lokalen Pflichtläufe, bevor sie freigeben.
 - PRs ohne Wiring-/Removal-Report oder ohne Logs der Pflichtläufe dürfen nicht gemergt werden.
 - Speichere relevante Terminalausgaben in `reports/` (aus dem `.gitignore`) oder im PR-Body.
 
