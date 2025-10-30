@@ -1,6 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+should_skip_smoke() {
+  local raw="${SMOKE_ENABLED:-}"
+  if [[ -z "$raw" ]]; then
+    return 1
+  fi
+
+  local normalized="${raw,,}"
+  # strip common whitespace characters to allow values like " false "
+  normalized="${normalized//[$'\t\n\r ']}"
+
+  case "$normalized" in
+    0|false|no|off|skip|disabled)
+      echo "Smoke checks disabled via SMOKE_ENABLED=${raw}" >&2
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+if should_skip_smoke; then
+  exit 0
+fi
+
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT_DIR"
 
