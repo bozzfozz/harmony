@@ -1,25 +1,22 @@
 # Backend CI vs. Docker Build Checks
 
-The repository defines two primary GitHub Actions workflows for backend quality gates and Docker image publication. They share some steps but are not identical in scope.
+The repository defines two primary GitHub Actions workflows for backend quality gates and Docker image publication. They share core steps but target different release moments.
 
-## `backend-ci` workflow
+## `release-check` workflow
 
-The `backend-ci` workflow runs on every push and pull request. Its single job, `Backend quality gates`, installs both runtime and dev/test dependencies and then executes a focused set of make targets:
+The [`release-check`](../.github/workflows/release-check.yml) workflow runs on release branches, release tags, and manual dispatches. After installing runtime and dev/test dependencies it executes:
 
-- `make docs-verify`
-- `make fmt`
-- `make lint`
-- `make test`
-- `make smoke`
+- `make release-check`, which expands to:
+  - `make all` (Formatierung, Linting, Dependency-Sync, Tests, Supply-Guard, Smoke)
+  - `make docs-verify`
+  - `make pip-audit`
+  - `make ui-smoke`
+- `make package-verify`, sodass Installation, Wheel-Build und `python -m build` nach jedem Gate reproduzierbar bleiben.
 
-These commands are invoked directly in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) and correspond to the default quality checks (formatting, linting, tests, and basic smoke validation). The workflow does **not** call `make release-check` and therefore does not run security scanning via `pip-audit`.
+Während des Laufs erzwingt der Workflow einen sauberen `git diff --exit-code`, schreibt strukturierte Logs nach `reports/release-check/release-check.log` und lädt die Artefakte `release-check-logs` sowie `release-packaging-artifacts` hoch.
 
 ## `docker-image` workflow
 
-The `docker-image` workflow is used when building and optionally publishing container images. After dependency installation, it runs `make release-check` before producing any Docker artifacts. `make release-check` expands to `make all`, `make docs-verify`, `make pip-audit`, and `make ui-smoke` as defined in the [`Makefile`](../Makefile). The `make all` target already covers `fmt`, `lint`, `dep-sync`, `test`, `supply-guard`, and `smoke`, so `release-check` is a superset of the backend CI checks with additional gates.
+Das manuell auslösbare [`docker-image`](../.github/workflows/docker-image.yml) wiederholt denselben `make release-check`-Gate-Lauf (inklusive `git diff --exit-code`) bevor Docker-Artefakte gebaut werden. Anschließend erstellt der Workflow Multi-Arch-Images über `docker/build-push-action`, versieht sie mit Metadaten und pusht sie zu `ghcr.io`. Ist der Eingabeparameter `smoke_enabled=true`, startet der Lauf optional einen Container-Smoketest, der `/api/health/ready` bis zu 60 Sekunden pollt.
 
-Because `release-check` includes `make pip-audit`, the Docker workflow fails whenever `pip-audit` reports a vulnerability in `requirements.txt`, `requirements-dev.txt`, or `requirements-test.txt`. In the Starlette advisory case (`GHSA-2c2j-9gv5-cj73`), backend CI still passes because it never invokes `pip-audit`, while the Docker workflow aborts due to the failing security gate. Updating the pinned Starlette version in `requirements.txt` resolves the discrepancy.
-
-For LinuxServer.io publication runs, append `make image-lsio` followed by `make smoke-lsio`. The smoke harness starts the LSIO
-container, waits up to 60 seconds for `/api/health/ready`, and asserts that `/config/harmony.db` exists to catch bootstrap
-regressions before pushing to `ghcr.io`.
+Für LinuxServer.io-Publikationen können `make image-lsio` und `make smoke-lsio` nachgeschaltet werden. Das Smoke-Harness startet den LSIO-Container, wartet bis zu 60 Sekunden auf `/api/health/ready` und stellt sicher, dass `/config/harmony.db` im Container sowie auf dem Host vorhanden ist, bevor Images veröffentlicht werden.

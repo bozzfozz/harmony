@@ -1,6 +1,6 @@
 # Lokaler Workflow ohne zentrale Build-Pipeline
 
-Harmony verlässt sich weiterhin auf nachvollziehbare lokale Gates. Ergänzend prüft der GitHub-Actions-Workflow [`backend-ci`](../../.github/workflows/ci.yml) jede Pull-Request sowie Pushes auf `main` mit denselben Kern-Gates, damit Beitragsende ihre lokalen Logs direkt mit den CI-Ergebnissen abgleichen können.
+Harmony verlässt sich weiterhin auf nachvollziehbare lokale Gates. Ergänzend prüft der GitHub-Actions-Workflow [`release-check`](../../.github/workflows/release-check.yml) alle Release-Branches, Release-Tags und manuellen Dispatches mit denselben Kern-Gates; das manuell ausgelöste [`docker-image`](../../.github/workflows/docker-image.yml) wiederholt den Gate-Lauf, bevor Container-Builds erstellt werden.
 
 ## Pflichtkommandos
 
@@ -35,18 +35,19 @@ Damit `make ui-smoke` (oder der in `make release-check` integrierte Lauf) zuverl
 - **Loopback-Erreichbarkeit:** Der Test ruft das UI über `http://127.0.0.1:${APP_PORT}` auf. Lokale Firewalls oder Container-Netzwerkregeln dürfen Verbindungen zum Loopback-Interface nicht blockieren.
 - **Soulseek-Proxy konfigurieren:** Ohne konfigurierten `SLSKD_API_KEY` bricht der Backend-Start vor dem Smoketest ab. Setze für lokale Läufe einen Dummy-Wert (z. B. `ui-smoke-key`), falls kein echtes SoulseekD-Backend erreichbar ist.
 
-## GitHub Actions `backend-ci`
+## GitHub Actions `release-check`
 
-Der Workflow stellt sicher, dass jede Änderung im Repository die wichtigsten Backend-Gates durchläuft:
+Der Workflow sichert Release-Branches, Release-Tags und manuelle Dispatches mit denselben Gates ab, die lokal verpflichtend sind:
 
-- **Format-Check:** `make fmt` läuft im Check-Modus (`git diff --exit-code` beendet den Lauf bei Formatierungsdrift).
-- **Linting & Typen:** `make lint` deckt Ruff und MyPy ab.
-- **Tests mit Coverage:** `make test` läuft mit `PYTEST_ADDOPTS=--cov=app --cov-report=xml --junitxml=...` und erzeugt `reports/ci/coverage.xml` sowie `reports/ci/pytest-junit.xml` für Artefakt-Uploads.
-- **Smoke-Test:** `make smoke` startet den FastAPI-Server inklusive Health-Ping.
+- Installiert Abhängigkeiten und führt `make release-check` aus. Das Target kombiniert `make all` (Formatierung, Linting, Dependency-Sync, Tests, Supply-Guard, Smoke), `make docs-verify`, `make pip-audit` und `make ui-smoke`.
+- Bricht beim ersten Fehler ab, schreibt strukturierte Logs nach `reports/release-check/release-check.log` und stellt per `git diff --exit-code` sicher, dass der Lauf keine Artefakte hinterlässt.
+- Führt anschließend `make package-verify` aus, um Installation, Wheel-Build und `python -m build` zu validieren.
 
-Die hochgeladenen Artefakte (`pytest-junit`, `coverage-xml`) erleichtern Reviews und dokumentieren fehlgeschlagene Läufe. Beitragsende sollten vor jedem Push dieselben Targets lokal ausführen und die erzeugten Logs im PR referenzieren.
+Die hochgeladenen Artefakte (`release-check-logs`, `release-packaging-artifacts`) dokumentieren die Gate-Läufe und erleichtern Reviews. Beitragsende sollten vor jedem Push dieselben Targets lokal ausführen und die erzeugten Logs im PR referenzieren.
 
-Der Readiness-Self-Check überwacht zusätzlich alle Pflicht-Templates sowie `app/ui/static/css/app.css`, `app/ui/static/js/htmx.min.js` und `app/ui/static/icons.svg`. Fehlt eines dieser Artefakte, melden `/api/health/ready`, `/api/system/ready` und `/api/system/status` einen degradierten Zustand.
+Das manuell auslösbare [`docker-image`](../../.github/workflows/docker-image.yml) nutzt denselben `make release-check`-Gate-Lauf als Vorbedingung für Container-Builds und kann optional einen Container-Smoketest starten, bevor Images gepusht werden.
+
+Der Readiness-Self-Check überwacht weiterhin alle Pflicht-Templates sowie `app/ui/static/css/app.css`, `app/ui/static/js/htmx.min.js` und `app/ui/static/icons.svg`. Fehlt eines dieser Artefakte, melden `/api/health/ready`, `/api/system/ready` und `/api/system/status` einen degradierten Zustand.
 
 ## Ablauf vor jedem Merge
 
