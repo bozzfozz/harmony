@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+import os
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -64,11 +65,35 @@ def _definition_for(service: str) -> ServiceDefinition:
     raise KeyError(f"Unknown service '{service}'")
 
 
-def _fetch_settings(session: Session, keys: Sequence[str]) -> Mapping[str, str | None]:
+def _normalized_env_value(env: Mapping[str, str], key: str) -> str | None:
+    value = env.get(key)
+    if value is None:
+        return None
+    trimmed = value.strip()
+    return trimmed or None
+
+
+def _fetch_settings(
+    session: Session, keys: Sequence[str], env: Mapping[str, str]
+) -> Mapping[str, str | None]:
     if not keys:
         return {}
     records = session.execute(select(Setting).where(Setting.key.in_(keys))).scalars().all()
-    return {record.key: record.value for record in records}
+    stored = {record.key: record.value for record in records}
+
+    resolved: dict[str, str | None] = {}
+    for key in keys:
+        value = stored.get(key)
+        if value is not None and value.strip():
+            resolved[key] = value
+            continue
+        env_value = _normalized_env_value(env, key)
+        if env_value is not None:
+            resolved[key] = env_value
+            continue
+        resolved[key] = value
+
+    return resolved
 
 
 def _is_missing(value: str | None) -> bool:
@@ -77,12 +102,17 @@ def _is_missing(value: str | None) -> bool:
     return value.strip() == ""
 
 
-def evaluate_service_health(session: Session, service: str) -> ServiceHealth:
+def evaluate_service_health(
+    session: Session,
+    service: str,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> ServiceHealth:
     """Evaluate credential health for the given service."""
 
     definition = _definition_for(service)
     keys: list[str] = list(definition.required_keys + definition.optional_keys)
-    settings = _fetch_settings(session, keys)
+    settings = _fetch_settings(session, keys, env or os.environ)
 
     def _resolve(key: str) -> str | None:
         return settings.get(key)
@@ -99,23 +129,28 @@ def evaluate_service_health(session: Session, service: str) -> ServiceHealth:
     )
 
 
-def evaluate_all_service_health(session: Session) -> Mapping[str, ServiceHealth]:
+def evaluate_all_service_health(
+    session: Session, *, env: Mapping[str, str] | None = None
+) -> Mapping[str, ServiceHealth]:
     """Return credential health for all configured services."""
 
     return {
-        definition.name: evaluate_service_health(session, definition.name)
+        definition.name: evaluate_service_health(session, definition.name, env=env)
         for definition in _SERVICE_DEFINITIONS
     }
 
 
 def collect_missing_credentials(
-    session: Session, services: Iterable[str]
+    session: Session,
+    services: Iterable[str],
+    *,
+    env: Mapping[str, str] | None = None,
 ) -> dict[str, tuple[str, ...]]:
     """Return missing required credentials for the given services."""
 
     missing: dict[str, tuple[str, ...]] = {}
     for service in services:
-        health = evaluate_service_health(session, service)
+        health = evaluate_service_health(session, service, env=env)
         if health.missing:
             missing[health.service] = tuple(health.missing)
     return missing
