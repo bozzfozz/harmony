@@ -1,0 +1,141 @@
+name: deps-refresh
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      run_pip_audit:
+        description: Run pip-audit after refreshing the lockfile
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh-lockfile:
+    name: Refresh uv.lock
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Refresh uv.lock
+        run: uv lock --upgrade
+
+      - name: Determine audit flag
+        id: audit_flag
+        run: |
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ] && [ "${RUN_PIP_AUDIT_INPUT}" = "false" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_PIP_AUDIT_INPUT: ${{ inputs.run_pip_audit }}
+
+      - name: Run pip-audit
+        id: pip_audit
+        if: steps.audit_flag.outputs.run == 'true'
+        run: |
+          set -o pipefail
+          uv run pip-audit | tee pip-audit-output.txt
+        continue-on-error: true
+
+      - name: Capture run metadata
+        id: metadata
+        env:
+          PIP_AUDIT_OUTCOME: ${{ steps.pip_audit.outcome }}
+        run: |
+          set -euo pipefail
+          today="$(TZ=Europe/Berlin date +%Y%m%d)"
+          echo "branch=chore/deps-refresh-${today}" >> "$GITHUB_OUTPUT"
+          echo "today=${today}" >> "$GITHUB_OUTPUT"
+          case "${PIP_AUDIT_OUTCOME:-skipped}" in
+            success)
+              status_message="pip-audit completed without detected vulnerabilities."
+              status="passed"
+              ;;
+            failure)
+              status_message="pip-audit detected vulnerabilities or exited with an error. Review the summary below."
+              status="failed"
+              ;;
+            *)
+              status_message="pip-audit was not executed for this run."
+              status="skipped"
+              ;;
+          esac
+          echo "audit_status=${status}" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$status_message" > audit-status.txt
+          if [ -f pip-audit-output.txt ]; then
+            tail -n 200 pip-audit-output.txt > pip-audit-tail.txt
+          fi
+          cat <<'BODY' > pr-body.md
+## Summary
+- Refresh `uv.lock` dependencies via `uv lock --upgrade`.
+
+## Checklist
+- [x] Dependencies refreshed with `uv lock --upgrade`
+- [ ] `make doctor`
+- [ ] `make all`
+- [ ] `make pip-audit`
+- [ ] Manual QA
+
+## Audit status
+BODY
+          cat audit-status.txt >> pr-body.md
+          printf '\n' >> pr-body.md
+          if [ -f pip-audit-tail.txt ]; then
+            {
+              echo '```text'
+              cat pip-audit-tail.txt
+              echo '```'
+            } >> pr-body.md
+          else
+            echo '_No audit output available._' >> pr-body.md
+          fi
+          echo "body_path=pr-body.md" >> "$GITHUB_OUTPUT"
+
+      - name: Create pull request
+        id: create_pr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: chore: refresh uv.lock
+          branch: ${{ steps.metadata.outputs.branch }}
+          title: chore(deps): refresh uv.lock
+          body-path: ${{ steps.metadata.outputs.body_path }}
+          add-paths: |
+            uv.lock
+
+      - name: Add security-fail label
+        if: steps.create_pr.outputs.pull-request-number != '0' && steps.metadata.outputs.audit_status == 'failed'
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.create_pr.outputs.pull-request-number }}
+        with:
+          script: |
+            const prNumber = Number(process.env.PR_NUMBER);
+            if (!Number.isFinite(prNumber) || prNumber === 0) {
+              return;
+            }
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              labels: ['security-fail'],
+            });
+
+      - name: Fail on audit failure
+        if: steps.metadata.outputs.audit_status == 'failed'
+        run: |
+          echo "::error::pip-audit reported vulnerabilities or errors."
+          exit 1
