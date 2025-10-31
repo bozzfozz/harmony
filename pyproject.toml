@@ -21,10 +21,11 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-    # Verified FastAPI 0.116.2 + Starlette 0.48.0 with the full pytest suite
-    # to ensure routing remains stable while regaining the GHSA-2c2j-9gv5-cj73 fix.
+    # Verified FastAPI 0.116.2 + Starlette 0.49.1 with the full pytest suite to
+    # ensure routing remains stable while regaining the GHSA-2c2j-9gv5-cj73 fix
+    # and addressing the GHSA-7f5h-v6xp-fcq8 Range header DoS.
     "fastapi==0.116.2",
-    "starlette==0.48.0",
+    "starlette==0.49.1",
     "uvicorn==0.30.1",
     "sqlalchemy==2.0.31",
     "aiohttp==3.12.14",

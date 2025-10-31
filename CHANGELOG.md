@@ -4,9 +4,14 @@ All notable changes to Harmony are documented in this file.
 
 ## Unreleased
 
-### Dependencies
-- Lock Starlette to `==0.48.0` now that FastAPI ships with a compatible release,
-  restoring deterministic runtime pins while we evaluate newer upstream changes.
+- Noch keine Einträge.
+
+## v1.0.1 — Security patch
+
+### Security
+- Aktualisiert Starlette auf 0.49.1 zur Behebung der öffentlich bekannten
+  DoS-Schwachstelle GHSA-7f5h-v6xp-fcq8 (Range-Header Parsing in FileResponse).
+- CI Release-Gate (`make pip-audit`) passiert wieder ohne Findings.
 
 ## v1.0.0 — Initial release
 

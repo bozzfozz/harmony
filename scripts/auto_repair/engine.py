@@ -378,9 +378,7 @@ class AutoRepairEngine:
                         status=status,
                         message=setup.message,
                         commands=(command_display,),
-                        warnings=()
-                        if setup.installed
-                        else (setup.message,),
+                        warnings=() if setup.installed else (setup.message,),
                     )
                 )
             if setup.required and not setup.installed:

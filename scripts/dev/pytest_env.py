@@ -22,6 +22,8 @@ class PytestCovSetupResult:
     command: tuple[str, ...] | None
     message: str
     env_updates: dict[str, str]
+
+
 def _coverage_requested(pytest_addopts: str) -> bool:
     return "--cov" in pytest_addopts or "--cov-report" in pytest_addopts
 
