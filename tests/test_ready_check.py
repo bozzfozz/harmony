@@ -200,6 +200,51 @@ def _create_ui_root(base_dir: Path) -> Path:
     return base_dir
 
 
+def test_ready_skips_soulseekd_when_integration_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    downloads_dir = tmp_path / "downloads"
+    music_dir = tmp_path / "music"
+    idempotency_db = tmp_path / "state" / "idempotency.db"
+    runtime_env = _base_ready_env(
+        downloads_dir=downloads_dir,
+        music_dir=music_dir,
+        idempotency_path=idempotency_db,
+    )
+    runtime_env["INTEGRATIONS_ENABLED"] = "spotify"
+    # Ensure reachability probe would fail if executed.
+    monkeypatch.setattr("app.ops.selfcheck.check_tcp_reachable", lambda *_, **__: False)
+
+    report = aggregate_ready(runtime_env=runtime_env)
+    assert report.ok
+
+    soulseekd_check = report.checks["soulseekd"]
+    assert soulseekd_check["enabled"] is False
+    assert soulseekd_check["status"] == "skipped"
+    assert soulseekd_check["reachable"] is None
+    assert soulseekd_check.get("reason") == "integration_disabled"
+
+
+def test_ready_reports_soulseekd_unreachable_when_enabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    downloads_dir = tmp_path / "downloads"
+    music_dir = tmp_path / "music"
+    idempotency_db = tmp_path / "state" / "idempotency.db"
+    runtime_env = _base_ready_env(
+        downloads_dir=downloads_dir,
+        music_dir=music_dir,
+        idempotency_path=idempotency_db,
+    )
+    monkeypatch.setattr("app.ops.selfcheck.check_tcp_reachable", lambda *_, **__: False)
+
+    report = aggregate_ready(runtime_env=runtime_env)
+    assert report.ok is False
+
+    issue = next(issue for issue in report.issues if issue.component == "soulseekd")
+    assert "Unable to reach Soulseekd" in issue.message
+
+
 @pytest.mark.parametrize(
     ("missing", "category"),
     [

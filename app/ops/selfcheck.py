@@ -38,6 +38,7 @@ EX_UNAVAILABLE = getattr(os, "EX_UNAVAILABLE", 69)
 EX_SOFTWARE = getattr(os, "EX_SOFTWARE", 70)
 
 _SLSKD_BASE_URL_KEYS = ("SLSKD_BASE_URL", "SLSKD_URL")
+_SLSKD_ALIASES = ("slskd", "soulseek", "soulseekd")
 
 _REQUIRED_ENV_BASE = (
     "SPOTIFY_CLIENT_ID",
@@ -76,6 +77,26 @@ def _default_database_url(profile: str) -> str:
     if profile == "test":
         return DEFAULT_DB_URL_TEST
     return DEFAULT_DB_URL_DEV
+
+
+def _parse_enabled_integrations(raw: str | None) -> tuple[str, ...]:
+    if not raw:
+        return ("spotify", "slskd")
+    items = [entry.strip().lower() for entry in str(raw).replace("\n", ",").split(",")]
+    resolved: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        if not item:
+            continue
+        if item not in seen:
+            seen.add(item)
+            resolved.append(item)
+    return tuple(resolved or ("spotify", "slskd"))
+
+
+def _is_slskd_required(env: Mapping[str, Any]) -> bool:
+    enabled = _parse_enabled_integrations(env.get("INTEGRATIONS_ENABLED"))
+    return any(alias in enabled for alias in _SLSKD_ALIASES)
 
 
 @dataclass(slots=True)
@@ -437,15 +458,18 @@ def aggregate_ready(
 
     host_value = (env.get("SLSKD_HOST") or "").strip()
     port_value = (env.get("SLSKD_PORT") or "").strip()
+    slskd_required = _is_slskd_required(env)
     soulseekd: dict[str, Any] = {
         "host": None,
         "port": None,
-        "reachable": False,
+        "reachable": None if not slskd_required else False,
         "base_url": base_url_value or None,
         "base_url_key": base_url_key,
         "configured_host": host_value or None,
         "configured_port": port_value or None,
         "source": None,
+        "enabled": slskd_required,
+        "status": "skipped" if not slskd_required else "pending",
     }
 
     port: int | None = None
@@ -510,12 +534,15 @@ def aggregate_ready(
             if resolved_host and resolved_port is not None:
                 source = "base_url"
 
-    if resolved_host and resolved_port is not None:
+    if not slskd_required:
+        soulseekd["reason"] = "integration_disabled"
+    elif resolved_host and resolved_port is not None:
         soulseekd["host"] = resolved_host
         soulseekd["port"] = resolved_port
         soulseekd["source"] = source
         reachable = check_tcp_reachable(resolved_host, resolved_port)
         soulseekd["reachable"] = reachable
+        soulseekd["status"] = "ok" if reachable else "fail"
         if not reachable:
             issues.append(
                 ReadyIssue(
@@ -526,6 +553,7 @@ def aggregate_ready(
                 )
             )
     else:
+        soulseekd["status"] = "fail"
         issues.append(
             ReadyIssue(
                 component="soulseekd",
