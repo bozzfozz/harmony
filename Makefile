@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit ui-guard ui-smoke docs-verify release-check pip-audit package-verify image-lsio smoke-lsio
+.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit ui-guard ui-smoke docs-verify release-check Release pip-audit package-verify image-lsio smoke-lsio
 .PHONY: supply-guard supply-guard-verbose supply-guard-warn
 .PHONY: foss-scan foss-enforce
 
@@ -53,6 +53,8 @@ all:
 
 release-check:
 	@python scripts/dev/release_check.py
+
+Release: release-check
 
 package-verify:
 	@python scripts/dev/package_verify.py
