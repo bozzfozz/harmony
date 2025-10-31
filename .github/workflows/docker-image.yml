@@ -32,14 +32,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Guard against requirements*.txt files
+        run: |
+          set -euo pipefail
+          if ls requirements*.txt 1>/dev/null 2>&1; then
+            echo "requirements*.txt files detected; please rely on uv instead." >&2
+            exit 1
+          fi
+
       - name: Supply guard
         run: make supply-guard
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v3
         with:
           version: "0.7.0"
-          python-version: "3.11"
 
       - name: Verify uv lockfile
         run: uv lock --check
