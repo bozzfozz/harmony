@@ -35,7 +35,6 @@ jobs:
       - name: Refresh uv.lock
         run: |
           uv lock --python 3.11 --python 3.12 --upgrade
-          uv lock --check
 
       - name: Sync environment
         run: uv sync --frozen
@@ -90,10 +89,10 @@ jobs:
           fi
           cat <<'BODY' > pr-body.md
 ## Summary
-- Refresh `uv.lock` dependencies via `uv lock --python 3.11 --python 3.12 --upgrade` followed by `uv lock --check`.
+- Refresh `uv.lock` dependencies via `uv lock --python 3.11 --python 3.12 --upgrade`.
 
 ## Checklist
-- [x] Dependencies refreshed with `uv lock --python 3.11 --python 3.12 --upgrade && uv lock --check`
+- [x] Dependencies refreshed with `uv lock --python 3.11 --python 3.12 --upgrade`
 - [ ] `make doctor`
 - [ ] `make all`
 - [ ] `make pip-audit`
