@@ -24,14 +24,16 @@ def _prepare_environment(
     return requirements_path
 
 
-def test_check_accepts_allowlisted_range(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sync_generates_expected_requirements(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     requirements_path = _prepare_environment(
         tmp_path,
         monkeypatch,
         pyproject_contents="""
 [project]
 dependencies = [
-    "starlette==0.49.1",
+    "fastapi==0.116.3",
     "anyio==3.7.1",
 ]
 """,
@@ -41,17 +43,23 @@ dependencies = [
     sync.sync_dependencies(check_only=True)
 
     contents = requirements_path.read_text("utf-8")
-    assert "starlette==0.49.1" in contents
+    lines = [line for line in contents.splitlines() if line and not line.startswith("#")]
+    assert lines == [
+        "fastapi==0.116.3",
+        "anyio==3.7.1",
+    ]
 
 
-def test_check_rejects_allowlisted_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_check_rejects_unexpected_dependency(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     requirements_path = _prepare_environment(
         tmp_path,
         monkeypatch,
         pyproject_contents="""
 [project]
 dependencies = [
-    "starlette==0.49.1",
+    "fastapi==0.116.3",
     "anyio==3.7.1",
 ]
 """,
@@ -60,9 +68,11 @@ dependencies = [
     sync.sync_dependencies(check_only=False)
     original = requirements_path.read_text("utf-8")
     requirements_path.write_text(
-        original.replace("starlette==0.49.1", "starlette<0.49.1"),
+        original + "starlette==0.49.1\n",
         encoding="utf-8",
     )
 
-    with pytest.raises(sync.DependencySyncError):
+    with pytest.raises(sync.DependencySyncError) as exc:
         sync.sync_dependencies(check_only=True)
+
+    assert "Unexpected entries in requirements.txt: starlette" in str(exc.value)

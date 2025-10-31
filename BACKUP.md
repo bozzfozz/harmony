@@ -3,12 +3,11 @@
 ## requirements.txt
 ```text
 # Runtime dependencies for Harmony backend
-# FastAPI 0.116.2 and Starlette 0.49.1 passed the full pytest suite, restoring
-# the GHSA-2c2j-9gv5-cj73 mitigation while also incorporating the Range header
-# DoS fix from GHSA-7f5h-v6xp-fcq8.
+# FastAPI 0.116.3 ships with Starlette ≥0.49.1 transitively, preserving the
+# GHSA-2c2j-9gv5-cj73 mitigation while incorporating the Range header DoS fix
+# from GHSA-7f5h-v6xp-fcq8 without an explicit Starlette pin.
 
-fastapi==0.116.2
-starlette==0.49.1
+fastapi==0.116.3
 uvicorn==0.30.1
 sqlalchemy==2.0.31
 aiohttp==3.12.14

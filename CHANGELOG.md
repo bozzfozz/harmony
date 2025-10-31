@@ -4,7 +4,9 @@ All notable changes to Harmony are documented in this file.
 
 ## Unreleased
 
-- Noch keine Einträge.
+### Security
+- FastAPI auf 0.116.3 angehoben, wodurch Starlette ≥ 0.49.1 transitiv eingebunden
+  wird und GHSA-7f5h-v6xp-fcq8 weiterhin ohne explizites Starlette-Pin mitigiert ist.
 
 ## v1.0.1 — Security patch
 
