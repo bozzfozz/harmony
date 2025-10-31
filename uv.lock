@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 
 [[package]]
@@ -7,8 +7,8 @@ name = "harmony"
 version = "0.0.0"
 source = { editable = "." }
 dependencies = [
-    { name = "fastapi", constraint = ">=0.115,<0.117" },
-    { name = "uvicorn", constraint = ">=0.30,<0.32" },
+    { name = "fastapi", constraint = ">=0.115,<0.200" },
+    { name = "uvicorn", constraint = ">=0.30,<0.40" },
     { name = "sqlalchemy", constraint = ">=2.0.31,<2.1" },
     { name = "aiohttp", constraint = ">=3.12,<3.13" },
     { name = "aiosqlite", constraint = ">=0.19,<0.20" },
@@ -17,7 +17,8 @@ dependencies = [
     { name = "httpx", constraint = ">=0.27,<0.28" },
     { name = "psutil", constraint = ">=5.9,<6" },
     { name = "mutagen", constraint = ">=1.47,<2" },
-    { name = "prometheus-client", constraint = ">=0.20,<0.21" },
+    { name = "prometheus-client", constraint = ">=0.20,<0.22" },
+    { name = "starlette", constraint = ">=0.49.1,<0.50" },
     { name = "unidecode", constraint = ">=1.3,<2" },
 ]
 
@@ -27,6 +28,11 @@ provides-extras = ["dev", "test"]
 [[package]]
 name = "fastapi"
 version = "0.116.2"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "starlette"
+version = "0.49.1"
 source = { registry = "https://pypi.org/simple" }
 
 [[package]]
