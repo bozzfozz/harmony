@@ -19,10 +19,8 @@ REQUIREMENTS_PATH = REPO_ROOT / "requirements.txt"
 DEFAULT_HEADER = ("# Runtime dependencies for Harmony backend",)
 
 # Dependencies that intentionally keep a range specifier instead of an exact pin.
-# Starlette is now locked to 0.49.1 so we can rely on a deterministic ASGI stack
-# while covering GHSA-7f5h-v6xp-fcq8; any drift from the exact pin must surface in
-# the sync guardrail. Leave this list empty unless a dependency temporarily
-# requires a range, and document the rationale inline when doing so.
+# Leave this list empty unless a dependency temporarily requires a range, and
+# document the rationale inline when doing so.
 RANGE_SPECIFIER_ALLOWLIST: frozenset[str] = frozenset()
 
 
