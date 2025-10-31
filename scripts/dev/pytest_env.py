@@ -89,6 +89,30 @@ def _inject_plugin_flag(pytest_addopts: str) -> tuple[str, bool]:
     return new_addopts, True
 
 
+def _builtin_pytest_cov_plugin() -> Path:
+    return REPO_ROOT / "pytest_cov" / "plugin.py"
+
+
+def _using_builtin_pytest_cov() -> bool:
+    """Return True when the repository-provided pytest-cov plugin is active."""
+
+    spec = importlib.util.find_spec("pytest_cov.plugin")
+    if spec is None or spec.origin is None:
+        return False
+
+    try:
+        origin = Path(spec.origin).resolve()
+    except OSError:
+        return False
+
+    try:
+        builtin = _builtin_pytest_cov_plugin().resolve()
+    except OSError:
+        return False
+
+    return origin == builtin
+
+
 def _import_pytest_cov_module() -> bool:
     try:
         importlib.import_module("pytest_cov")
@@ -159,9 +183,10 @@ def ensure_pytest_cov(pytest_addopts: str | None = None) -> PytestCovSetupResult
         )
 
     if _ensure_pytest_cov_available():
-        updated_addopts, mutated = _inject_plugin_flag(addopts)
-        if mutated:
-            env_updates["PYTEST_ADDOPTS"] = updated_addopts
+        if _using_builtin_pytest_cov():
+            updated_addopts, mutated = _inject_plugin_flag(addopts)
+            if mutated:
+                env_updates["PYTEST_ADDOPTS"] = updated_addopts
         pythonpath_update = _pythonpath_with_repo(os.getenv("PYTHONPATH"))
         if pythonpath_update is not None:
             env_updates["PYTHONPATH"] = pythonpath_update
@@ -184,9 +209,10 @@ def ensure_pytest_cov(pytest_addopts: str | None = None) -> PytestCovSetupResult
     if completed.returncode == 0:
         importlib.invalidate_caches()
         if _ensure_pytest_cov_available():
-            updated_addopts, mutated = _inject_plugin_flag(addopts)
-            if mutated:
-                env_updates["PYTEST_ADDOPTS"] = updated_addopts
+            if _using_builtin_pytest_cov():
+                updated_addopts, mutated = _inject_plugin_flag(addopts)
+                if mutated:
+                    env_updates["PYTEST_ADDOPTS"] = updated_addopts
             pythonpath_update = _pythonpath_with_repo(os.getenv("PYTHONPATH"))
             if pythonpath_update is not None:
                 env_updates["PYTHONPATH"] = pythonpath_update
