@@ -6,6 +6,11 @@ repos:
       - id: ruff
   - repo: local
     hooks:
+      - id: uv-lock-check
+        name: uv lock --check
+        entry: uv lock --check
+        language: system
+        pass_filenames: false
       - id: fmt-sh
         name: scripts/dev/fmt.sh
         entry: scripts/dev/fmt.sh

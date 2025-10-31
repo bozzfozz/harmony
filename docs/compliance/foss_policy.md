@@ -68,7 +68,7 @@ Unknown-Lizenzen weisen auf fehlende Metadaten oder ungeklärte Lizenztexte hin.
 
 ### Abdeckung je Ökosystem
 
-- **Python**: `requirements*.txt`, optional `pyproject.toml`. Lizenzen werden per `importlib.metadata` (mit Fallback auf bekannte Paket-
+- **Python**: `uv.lock`, optional `pyproject.toml`. Lizenzen werden per `importlib.metadata` (mit Fallback auf bekannte Paket-
   Mappings) ermittelt. Zusätzliche Index-Optionen (`--extra-index-url`, `--index-url`, `--find-links`) werden blockiert.
 - **Node.js**: `package-lock.json` / `NPM-shrinkwrap.json`. Registry-URLs werden auf `registry.n""pmjs.org` geprüft.
 - **Docker**: Alle `Dockerfile*` werden auf erlaubte Basis-Images geprüft.

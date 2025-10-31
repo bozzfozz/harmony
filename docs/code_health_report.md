@@ -14,7 +14,7 @@
 | `pytest -q` | ✅ | Full suite passes; FastAPI lifespan migration eliminates prior `on_event` warnings. |
 | `vulture app tests --exclude .venv` | ⚠️ | Binary unavailable in the offline environment; cannot verify dead-code findings without vendored wheel. |
 | `radon cc -s -a app` | ⚠️ | CLI missing and pip installation is blocked; recommend bundling radon for deterministic local runs. |
-| `pip-audit -r requirements.txt` | ⚠️ | Runtime pins audited locally; offline environment lacks `pip-audit`. |
+| `uv run --no-sync pip-audit -r <export>` | ⚠️ | Runtime pins audited lokal via uv; Offline-Umgebung blockiert den Netz-Scan. |
 
 ## Notable Changes
 - Introduced helper functions that encapsulate application configuration, worker startup, and worker shutdown to reduce repetition and cyclomatic complexity in `app/main.py`.

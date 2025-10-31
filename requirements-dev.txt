@@ -1,3 +1,0 @@
-# Developer tooling dependencies are defined in pyproject.toml optional groups.
-# Export a pinned view with:
-#   uv export --format requirements-txt --no-hashes --group dev --output requirements-dev.txt

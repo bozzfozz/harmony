@@ -11,17 +11,20 @@ RUN apk add --no-cache \
 
 RUN python3 -m pip install --upgrade pip
 
-COPY requirements*.txt /tmp/pip/
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:${PATH}"
+
+COPY pyproject.toml uv.lock /tmp/app/
 
 RUN set -eux; \
-    for requirement in /tmp/pip/requirements*.txt; do \
-        [ -f "$requirement" ] || continue; \
-        python3 -m pip install --no-cache-dir -r "$requirement"; \
-    done; \
-    rm -rf /tmp/pip
+    uv pip install --system --requirements /tmp/app/uv.lock; \
+    rm -rf /root/.cache/uv /tmp/app
 
 COPY app/ /app/
+COPY pyproject.toml /app/
 COPY jinja2/ /app/jinja2/
+
+RUN uv pip install --system --no-deps --editable /app
 COPY docker/lsio/root/ /
 
 WORKDIR /app

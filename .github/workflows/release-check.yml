@@ -30,23 +30,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          version: "0.7.0"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
-            requirements-test.txt
-            pyproject.toml
+
+      - name: Verify uv lockfile
+        run: uv lock --check
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -r requirements-dev.txt -r requirements-test.txt
-          pip install -e .
+          uv sync --group dev --group test
 
       - name: Run pytest (verbose)
         env:
@@ -55,7 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p reports/release-check
-          pytest -vv --maxfail=1 --disable-warnings 2>&1 | tee reports/release-check/pytest-output.txt
+          uv run --no-sync --group dev --group test pytest -vv --maxfail=1 --disable-warnings 2>&1 | tee reports/release-check/pytest-output.txt
 
       - name: Upload pytest log
         if: always()
@@ -81,13 +80,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p reports/release-check
-          make release-check |& tee reports/release-check/release-check.log
+          uv run --no-sync --group dev --group test make release-check |& tee reports/release-check/release-check.log
           git diff --exit-code
 
       - name: Check FastAPI/Starlette compatibility window
         run: |
           set -euo pipefail
-          python - <<'PY'
+          uv run --no-sync --group dev --group test python - <<'PY'
 import sys
 
 try:
@@ -111,7 +110,7 @@ PY
       - name: Verify packaging pipeline
         run: |
           set -euo pipefail
-          make package-verify
+          uv run --no-sync --group dev --group test make package-verify
 
       - name: Upload packaging artifacts
         if: always()

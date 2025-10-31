@@ -1,3 +1,0 @@
-# Test dependencies live in the pyproject.toml optional "test" group.
-# Export a pinned view with:
-#   uv export --format requirements-txt --no-hashes --group test --output requirements-test.txt

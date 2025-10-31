@@ -1,3 +1,0 @@
-# Runtime dependencies are managed in pyproject.toml.
-# Generate a pinned export if needed:
-#   uv export --format requirements-txt --no-hashes --output requirements.txt

@@ -23,13 +23,13 @@ Harmony verlässt sich weiterhin auf nachvollziehbare lokale Gates. Ergänzend p
 
 **Hinweis:** MyPy ist jetzt ein Pflicht-Gate innerhalb von `make lint`. Schlägt die statische Typprüfung fehl oder fehlt das Tooling, wird der gesamte Lauf (und damit auch `make all` bzw. `make release-check`) mit einem Fehler abgebrochen.
 
-**Zusatzhinweis:** `make pip-audit` benötigt das gleichnamige CLI aus `requirements-dev.txt` sowie Internetzugang, damit die Sicherheitsprüfung erfolgreich abgeschlossen werden kann.
+**Zusatzhinweis:** `make pip-audit` verwendet `uvx pip-audit` und benötigt Internetzugang, damit die Sicherheitsprüfung erfolgreich abgeschlossen werden kann.
 
 ### Voraussetzungen für den UI-Smoketest
 
 Damit `make ui-smoke` (oder der in `make release-check` integrierte Lauf) zuverlässig grün wird, müssen lokal folgende Bedingungen erfüllt sein:
 
-- **Python-Abhängigkeiten installiert:** `uvicorn` und `httpx` stammen aus den Backend-Requirements. Installiere sie über `pip install -r requirements.txt -r requirements-dev.txt -r requirements-test.txt` oder `pip install -e .`.
+- **Python-Abhängigkeiten installiert:** `uvicorn` und `httpx` stammen aus den Backend-Requirements. Installiere sie über `uv sync --group dev --group test`.
 - **Freier API-Port:** Der Test startet `uvicorn` auf dem per `APP_PORT` (Standard: `8080`) aus `app.config` ermittelten Port. Stelle sicher, dass kein anderes Programm auf diesem Port lauscht oder setze `APP_PORT` vorher auf einen freien Port.
 - **Schreibrechte im Repository:** Das Skript legt Log- und Daten-Dateien unter `.tmp/` an (`ui-smoke.log`, `ui-smoke.db`, Downloads/Music-Verzeichnisse). Für schreibgeschützte Mounts oder temporäre Dateisysteme muss ein alternativer Speicherort per `TMPDIR`/`DOWNLOADS_DIR`/`MUSIC_DIR` konfiguriert werden.
 - **Loopback-Erreichbarkeit:** Der Test ruft das UI über `http://127.0.0.1:${APP_PORT}` auf. Lokale Firewalls oder Container-Netzwerkregeln dürfen Verbindungen zum Loopback-Interface nicht blockieren.
@@ -79,7 +79,7 @@ Der Readiness-Self-Check überwacht weiterhin alle Pflicht-Templates sowie `app/
 - **Optionale Requirement-Guards:** Setze `DOCTOR_PIP_REQS=1`, wenn `pip-missing-reqs`/`pip-extra-reqs` zwingend geprüft werden sollen.
 
 ### `make dep-sync`
-- **Missing Dependencies:** Passe `requirements*.txt` an und wiederhole den Lauf.
+- **Missing Dependencies:** Aktualisiere `pyproject.toml`/`uv.lock` und wiederhole den Lauf.
 - **Unused Dependencies:** Entferne nicht mehr benötigte Pakete oder markiere sie als bewusst benötigt (z. B. durch tatsächliche Nutzung in Code/Tests).
 
 ### `make supply-guard`

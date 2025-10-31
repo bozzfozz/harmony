@@ -21,7 +21,7 @@ Diese Guidelines definieren Standards für den Aufbau und die Pflege von Backend
 
 ## 3. Twelve-Factor App Prinzipien (angepasst)
 1. **Config**: Konfiguration über Umgebungsvariablen oder Settings-Dateien, niemals fest im Code.  
-2. **Dependencies**: Alle Abhängigkeiten deklarieren (`requirements*.txt`, `pyproject.toml`).
+2. **Dependencies**: Alle Abhängigkeiten deklarieren (`uv.lock`, `pyproject.toml`).
 3. **Logs**: Strukturierte Logs mit Leveln (`INFO`, `ERROR`, `DEBUG`), keine `print()`.  
 4. **Disposability**: Prozesse (inkl. Worker) müssen sauber starten und stoppen können.  
 5. **Dev/Prod parity**: Entwicklungsumgebung soll Produktionsumgebung möglichst ähneln (z. B. Docker).  
