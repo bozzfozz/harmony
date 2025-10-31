@@ -43,6 +43,7 @@ if ! command -v pip-audit >/dev/null 2>&1; then
   printf 'pip-audit installed successfully; continuing with vulnerability scans.\n' >&2
 fi
 
+help_output=""
 if help_output=$(pip-audit --help 2>&1); then
   if grep -q -- '--progress-spinner' <<<"$help_output"; then
     audit_flags=("--progress-spinner" "off")
@@ -56,13 +57,23 @@ else
   audit_flags=()
 fi
 
+config_args=()
+config_file="pip-audit.toml"
+if [[ -f "$config_file" ]]; then
+  if [[ -n $help_output && $help_output == *"--config"* ]]; then
+    config_args=("-c" "$config_file")
+  else
+    printf 'pip-audit does not support configuration files; running without %s.\n' "$config_file" >&2
+  fi
+fi
+
 requirements_files=("requirements.txt")
 [[ -f "requirements-dev.txt" ]] && requirements_files+=("requirements-dev.txt")
 [[ -f "requirements-test.txt" ]] && requirements_files+=("requirements-test.txt")
 
 for req_file in "${requirements_files[@]}"; do
   printf '==> pip-audit (%s)\n' "$req_file"
-  if audit_output=$(pip-audit "${audit_flags[@]}" -r "$req_file" 2>&1); then
+  if audit_output=$(pip-audit "${audit_flags[@]}" "${config_args[@]}" --strict -r "$req_file" 2>&1); then
     printf '%s\n' "$audit_output"
   else
     printf '%s\n' "$audit_output" >&2
