@@ -39,7 +39,7 @@ pre-commit run --hook-stage push
 
 ## Manuelle Nightly-/Security-Checks
 
-- `make release-check` führt `pip-audit` bereits für alle verfügbaren `requirements*.txt`-Dateien aus. Dokumentiere erkannte
+- `make release-check` führt `pip-audit` bereits für alle im `uv.lock` fixierten Abhängigkeiten aus. Dokumentiere erkannte
   Schwachstellen direkt im PR, falls der Lauf fehlschlägt.
 - Generiere auf Wunsch SBOMs über `pip install cyclonedx-bom` und dokumentiere externe Bezugsquellen der Python-Abhängigkeiten.
 

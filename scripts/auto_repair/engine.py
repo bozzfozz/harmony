@@ -108,28 +108,28 @@ class RepairContext:
 
 class PipHashFixer(Fixer):
     issue_id = "python.hash"
-    description = "Recompile Python requirement hashes via pip-compile"
+    description = "Regenerate the uv lockfile to repair dependency drift"
 
     def matches(self, context: RepairContext) -> bool:
         output = context.combined_output.lower()
-        if "hash" not in output:
-            return False
-        return "hash" in output and ("do not match" in output or "expected" in output)
+        if "hash" in output and ("do not match" in output or "expected" in output):
+            return True
+        return "uv.lock" in output and "update" in output
 
     def apply(self, context: RepairContext, logger: ReasonTraceLogger) -> FixOutcome:
         logger.emit(
             step="DECIDE",
-            why="Detected pip hash drift",
+            why="Detected dependency hash drift",
             command=context.command.name,
             nxt="FIX",
         )
-        pip_compile = shutil.which("pip-compile") or shutil.which("pipcompile")
-        if not pip_compile:
-            message = "pip-compile is required for hash regeneration"
+        uv_exe = shutil.which("uv")
+        if not uv_exe:
+            message = "uv is required to regenerate uv.lock"
             logger.emit(
                 step="FIX",
                 why=message,
-                command="pip-compile",
+                command="uv",
                 result="MISSING",
                 nxt="DONE",
             )
@@ -138,59 +138,47 @@ class PipHashFixer(Fixer):
                 description=self.description,
                 success=False,
                 message=message,
-                warnings=["Install pip-tools and rerun auto-repair"],
+                warnings=["Install uv >= 0.7 and rerun auto-repair"],
             )
 
-        requirements_files = [
-            REPO_ROOT / "requirements.txt",
-            REPO_ROOT / "requirements-dev.txt",
-            REPO_ROOT / "requirements-test.txt",
-        ]
-        executed: list[str] = []
-        for req_file in requirements_files:
-            if not req_file.exists():
-                continue
-            command = [pip_compile, "--generate-hashes", str(req_file)]
-            display = " ".join(command)
-            completed = subprocess.run(
-                command, cwd=REPO_ROOT, capture_output=True, text=True, check=False
+        command = [uv_exe, "lock"]
+        display = " ".join(command)
+        completed = subprocess.run(
+            command, cwd=REPO_ROOT, capture_output=True, text=True, check=False
+        )
+        logger.emit(
+            step="FIX",
+            why="Regenerating uv.lock",
+            command=display,
+            result=f"exit={completed.returncode}",
+            nxt="VERIFY" if completed.returncode == 0 else "DONE",
+        )
+        if completed.returncode != 0:
+            message = textwrap.shorten(
+                completed.stderr.strip() or completed.stdout.strip(), width=240
             )
-            executed.append(display)
-            logger.emit(
-                step="FIX",
-                why="Regenerating requirement hashes",
-                command=display,
-                result=f"exit={completed.returncode}",
-                nxt="FIX" if req_file is not requirements_files[-1] else "VERIFY",
+            return FixOutcome(
+                issue_id=self.issue_id,
+                description=self.description,
+                success=False,
+                message=message,
+                commands=[display],
+                warnings=["Review 'uv lock' output for details"],
             )
-            if completed.returncode != 0:
-                message = textwrap.shorten(
-                    completed.stderr.strip() or completed.stdout.strip(), width=240
-                )
-                return FixOutcome(
-                    issue_id=self.issue_id,
-                    description=self.description,
-                    success=False,
-                    message=message,
-                    commands=executed.copy(),
-                    warnings=["Review pip-compile output for details"],
-                )
 
         logger.emit(
             step="VERIFY",
-            why="pip hash regeneration complete",
-            command="; ".join(executed) if executed else "noop",
+            why="uv.lock regenerated",
+            command=display,
             result="exit=0",
             nxt="RE-RUN",
         )
-        message = "Requirement hashes regenerated" if executed else "No requirements files found"
         return FixOutcome(
             issue_id=self.issue_id,
             description=self.description,
-            success=bool(executed),
-            message=message,
-            commands=executed,
-            warnings=[] if executed else ["No requirements*.txt files found for regeneration"],
+            success=True,
+            message="uv.lock regenerated",
+            commands=[display],
         )
 
 

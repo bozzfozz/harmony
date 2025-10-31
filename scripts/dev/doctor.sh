@@ -6,6 +6,31 @@ cd "$ROOT_DIR"
 
 status=0
 
+have_uv=false
+if command -v uv >/dev/null 2>&1; then
+  have_uv=true
+fi
+
+export_requirements() {
+  local output_path=$1
+  shift
+
+  if ! $have_uv; then
+    return 1
+  fi
+
+  if ! uv export --locked --format requirements.txt --output-file "$output_path" "$@" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if [[ ! -s "$output_path" ]]; then
+    rm -f "$output_path"
+    return 1
+  fi
+
+  return 0
+}
+
 log_pass() {
   printf '[PASS] %s\n' "$1"
 }
@@ -51,13 +76,13 @@ fi
 if command -v ruff >/dev/null 2>&1; then
   log_pass "ruff available"
 else
-  log_fail "ruff missing (install via 'pip install -r requirements-dev.txt')"
+  log_fail "ruff missing (install via 'uv sync --group dev' or 'uv tool install ruff')"
 fi
 
 if command -v pytest >/dev/null 2>&1; then
   log_pass "pytest available"
 else
-  log_fail "pytest missing (install via 'pip install -r requirements-test.txt')"
+  log_fail "pytest missing (install via 'uv sync --group test' or 'uv tool install pytest')"
 fi
 
 check_directory() {
@@ -131,20 +156,17 @@ else
   log_warn "pip check skipped (python missing)"
 fi
 
-if command -v pip-audit >/dev/null 2>&1; then
-  if audit_output=$(pip-audit --disable-progress-bar -r requirements.txt 2>&1); then
-    log_pass "pip-audit (requirements.txt)"
+if $have_uv; then
+  audit_log=$(mktemp)
+  if scripts/dev/pip_audit.sh >"$audit_log" 2>&1; then
+    log_pass "pip-audit (uv.lock)"
   else
-    if printf '%s' "$audit_output" | grep -qiE 'network|connection|timed out|temporary failure|Name or service not known|offline'; then
-      log_warn "pip-audit skipped (offline)"
-      print_detail "$audit_output"
-    else
-      log_fail "pip-audit reported issues"
-      print_detail "$audit_output"
-    fi
+    log_fail "pip-audit reported issues"
+    print_detail "$(cat "$audit_log")"
   fi
+  rm -f "$audit_log"
 else
-  log_warn "pip-audit not installed; skipping security audit"
+  log_warn "pip-audit skipped (uv not available)"
 fi
 
 if to_bool "${DOCTOR_PIP_REQS:-}"; then
@@ -160,14 +182,31 @@ if to_bool "${DOCTOR_PIP_REQS:-}"; then
   fi
 
   if command -v pip-extra-reqs >/dev/null 2>&1; then
-    requirements_args=(--requirements-file requirements.txt)
-    [[ -f requirements-test.txt ]] && requirements_args+=(--requirements-file requirements-test.txt)
-    [[ -f requirements-dev.txt ]] && requirements_args+=(--requirements-file requirements-dev.txt)
-    if output=$(pip-extra-reqs "${requirements_args[@]}" app tests 2>&1); then
-      log_pass "pip-extra-reqs"
+    tmp_dir=$(mktemp -d)
+    runtime_requirements="$tmp_dir/runtime.txt"
+    if ! export_requirements "$runtime_requirements"; then
+      rm -rf "$tmp_dir"
+      log_fail "pip-extra-reqs prerequisites missing (uv export failed)"
     else
-      log_fail "pip-extra-reqs reported issues"
-      print_detail "$output"
+      requirements_args=(--requirements-file "$runtime_requirements")
+
+      dev_requirements="$tmp_dir/dev.txt"
+      if export_requirements "$dev_requirements" --only-group dev; then
+        requirements_args+=(--requirements-file "$dev_requirements")
+      fi
+
+      test_requirements="$tmp_dir/test.txt"
+      if export_requirements "$test_requirements" --only-group test; then
+        requirements_args+=(--requirements-file "$test_requirements")
+      fi
+
+      if output=$(pip-extra-reqs "${requirements_args[@]}" app tests 2>&1); then
+        log_pass "pip-extra-reqs"
+      else
+        log_fail "pip-extra-reqs reported issues"
+        print_detail "$output"
+      fi
+      rm -rf "$tmp_dir"
     fi
   else
     log_fail "pip-extra-reqs missing (required because DOCTOR_PIP_REQS=1)"

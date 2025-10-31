@@ -40,7 +40,7 @@ else
 fi
 
 if ! $PYTHON_BIN -c "import uvicorn" >/dev/null 2>&1; then
-  echo "uvicorn is required. Install backend dependencies via 'pip install -r requirements.txt'." >&2
+  echo "uvicorn is required. Install backend dependencies via 'uv sync' before running the smoke test." >&2
   exit 1
 fi
 

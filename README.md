@@ -160,34 +160,33 @@ the audience hubs in [`docs/user/README.md`](docs/user/README.md) and
 
 ## Dependency management
 
-Runtime dependencies are pinned in [`requirements.txt`](requirements.txt) and power the
-production Docker image. Local development installs the runtime stack first, then tooling
-and test libraries:
+Harmony standardises on [uv](https://github.com/astral-sh/uv) for dependency resolution,
+locking and virtual-environment management. Install **uv ≥ 0.7.0** and sync all
+development extras before running tooling or tests:
 
 ```bash
-pip install -r requirements.txt
-pip install -r requirements-dev.txt -r requirements-test.txt
+uv sync --group dev --group test
+uv run --no-sync --group dev --group test pytest
 ```
 
-`requirements-dev.txt` provides linting and static-analysis tools, while
-`requirements-test.txt` contains pytest and asyncio fixtures for the test suite. Regenerate
-the pins with [`pip-compile`](https://pip-tools.readthedocs.io/) when dependency upgrades
-are introduced.
+The lockfile lives in [`uv.lock`](uv.lock). Update it with `uv lock` whenever
+`pyproject.toml` changes and commit the refreshed lock alongside the source update.
+Use `uv export --locked --format requirements.txt` to generate ad-hoc requirement
+exports for environments that cannot run uv directly.
 
 ## Release gate
 
-Run `make release-check` (or the legacy alias `make Release`) before tagging or publishing a release. The target now delegates
-to `scripts/dev/release_check.py`, which executes the full backend and UI gate (`make
-all`), verifies documentation references (`make docs-verify`), audits all
-`requirements*.txt` pins for known vulnerabilities via `make pip-audit`, and finishes
-with the UI smoke test. The script emits structured JSON logs and stops immediately after
-the first failing command to preserve the previous error context. Use `python
+Run `make release-check` (or the legacy alias `make Release`) before tagging or publishing
+a release. The target delegates to `scripts/dev/release_check.py`, which executes the full
+backend and UI gate (`make all`), verifies documentation references (`make docs-verify`),
+audits the locked dependencies via `make pip-audit`, and finishes with the UI smoke test.
+The script emits structured JSON logs and stops immediately after the first failing
+command to preserve the previous error context. Use `python
 scripts/dev/release_check.py --dry-run` to inspect the planned steps without executing
 them, or override the executed commands in CI with
-`RELEASE_CHECK_COMMANDS="<cmd1>\n<cmd2>"` for targeted verifications. Ensure the
-[`pip-audit`](https://pypi.org/project/pip-audit/) CLI from `requirements-dev.txt` is
-installed and that network access is available so the security scan can complete without
-downgrading the gate.
+`RELEASE_CHECK_COMMANDS="<cmd1>\n<cmd2>"` for targeted verifications. Ensure
+[`pip-audit`](https://pypi.org/project/pip-audit/) can reach the internet so the security
+scan completes without downgrading the gate.
 
 When preparing the LinuxServer.io image, build it with `make image-lsio` and verify the
 runtime with `make smoke-lsio`. The smoke harness boots the freshly built container,

@@ -304,8 +304,9 @@ record_result() {
 process_python() {
   local data
   data=$(python3 <<'PY'
+import shutil
+import subprocess
 import sys
-from pathlib import Path
 from importlib.metadata import metadata, PackageNotFoundError
 
 KNOWN_LICENSES = {
@@ -330,13 +331,30 @@ KNOWN_LICENSES = {
 }
 SENTINEL = "__EMPTY__"
 
-req_files = sorted({path for pattern in ('requirements.txt', 'requirements-*.txt') for path in Path('.').glob(pattern)})
-if not req_files:
+uv_path = shutil.which('uv')
+if not uv_path:
     sys.exit(0)
 
-for req_file in sorted(req_files):
-    print(f"FILE\t{req_file.as_posix()}")
-    for raw_line in req_file.read_text().splitlines():
+EXPORT_TARGETS = [
+    ("uv export (runtime)", []),
+    ("uv export (dev)", ["--only-group", "dev"]),
+    ("uv export (test)", ["--only-group", "test"]),
+]
+
+def iter_requirements():
+    for label, args in EXPORT_TARGETS:
+        cmd = [uv_path, "export", "--locked", "--format", "requirements.txt", *args]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            continue
+        contents = result.stdout.strip()
+        if not contents:
+            continue
+        yield label, contents.splitlines()
+
+for manifest, lines in iter_requirements():
+    print(f"FILE\t{manifest}")
+    for raw_line in lines:
         line = raw_line.strip()
         if not line or line.startswith('#'):
             continue
@@ -346,22 +364,22 @@ for req_file in sorted(req_files):
             value = line.split(None, 1)[1] if ' ' in line else ''
             if not value:
                 value = SENTINEL
-            print(f"OPTION\textra-index-url\t{req_file.as_posix()}\t{value}")
+            print(f"OPTION\textra-index-url\t{manifest}\t{value}")
             continue
         if line.startswith('--index-url'):
             value = line.split(None, 1)[1] if ' ' in line else ''
             if not value:
                 value = SENTINEL
-            print(f"OPTION\tindex-url\t{req_file.as_posix()}\t{value}")
+            print(f"OPTION\tindex-url\t{manifest}\t{value}")
             continue
         if line.startswith('--find-links'):
             value = line.split(None, 1)[1] if ' ' in line else ''
             if not value:
                 value = SENTINEL
-            print(f"OPTION\tfind-links\t{req_file.as_posix()}\t{value}")
+            print(f"OPTION\tfind-links\t{manifest}\t{value}")
             continue
         if line.startswith('--'):
-            print(f"OPTION\tother\t{req_file.as_posix()}\t{line}")
+            print(f"OPTION\tother\t{manifest}\t{line}")
             continue
         note_tokens = []
         working = line
@@ -390,7 +408,6 @@ for req_file in sorted(req_files):
         if ver_match:
             version = ver_match.group(1)
         license_text = ''
-        license_source = 'metadata'
         for candidate in {name, name.replace('-', '_')}:
             try:
                 meta = metadata(candidate)
@@ -416,7 +433,7 @@ for req_file in sorted(req_files):
             version or SENTINEL,
             license_text or SENTINEL,
             source or SENTINEL,
-            req_file.as_posix(),
+            manifest,
             ','.join(note_tokens) or SENTINEL
         ]))
 PY

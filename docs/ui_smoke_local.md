@@ -15,9 +15,9 @@ firewalled environment.
 
 ### Online Workflow
 
-1. From the repository root, install the backend requirements:
+1. From the repository root, install the backend requirements with uv:
    ```bash
-   python -m pip install -r requirements.txt
+   uv sync
    ```
 2. Run the smoke script:
    ```bash
