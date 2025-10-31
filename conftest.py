@@ -3,31 +3,70 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
+from types import ModuleType
 from typing import Final
 
 
-def _builtin_pytest_cov_plugin() -> Path:
-    return Path(__file__).resolve().parent / "pytest_cov" / "plugin.py"
+def _builtin_pytest_cov_package() -> Path:
+    return Path(__file__).resolve().parent / "pytest_cov"
 
 
-def _should_register_builtin_pytest_cov() -> bool:
-    """Return True when the repository's fallback pytest-cov plugin should load."""
+def _load_module(name: str, path: Path, *, package: bool = False) -> ModuleType | None:
+    spec = importlib.util.spec_from_file_location(
+        name,
+        path,
+        submodule_search_locations=[str(path.parent)] if package else None,
+    )
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    loader = spec.loader
+    try:
+        loader.exec_module(module)  # type: ignore[call-arg]
+    except OSError:
+        return None
+    sys.modules[name] = module
+    return module
 
-    expected = _builtin_pytest_cov_plugin()
-    spec = importlib.util.find_spec("pytest_cov.plugin")
-    if spec is None or spec.origin is None:
-        return False
+
+def _ensure_builtin_pytest_cov() -> bool:
+    """Ensure Harmony's pytest-cov shim is importable as ``pytest_cov``."""
+
+    expected_plugin = _builtin_pytest_cov_package() / "plugin.py"
 
     try:
-        origin = Path(spec.origin).resolve()
-    except OSError:
+        existing = importlib.util.find_spec("pytest_cov.plugin")
+    except (ImportError, AttributeError):
+        existing = None
+
+    if existing is not None and existing.origin is not None:
+        try:
+            origin = Path(existing.origin).resolve()
+        except OSError:
+            origin = None
+        else:
+            if origin == expected_plugin:
+                return True
+
+    module = sys.modules.get("pytest_cov.plugin")
+    if module is not None and hasattr(module, "HarmonyCoveragePlugin"):
+        return True
+
+    package_dir = _builtin_pytest_cov_package()
+    package_init = package_dir / "__init__.py"
+    package = _load_module("pytest_cov", package_init, package=True)
+    if package is None:
         return False
+    plugin = _load_module("pytest_cov.plugin", expected_plugin)
+    if plugin is None:
+        return False
+    setattr(package, "plugin", plugin)
+    return hasattr(plugin, "HarmonyCoveragePlugin")
 
-    return origin == expected
 
-
-if _should_register_builtin_pytest_cov():
+if _ensure_builtin_pytest_cov():
     _plugins: tuple[str, ...] = ("pytest_cov.plugin",)
 else:
     _plugins = tuple()
