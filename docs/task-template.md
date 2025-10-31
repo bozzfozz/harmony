@@ -79,10 +79,12 @@ DUE: <YYYY-MM-DD>
 - [ ] Report/Notizen (optional: `reports/`)
 
 ## 12) Lokale Gates (Merge-Blocking, Schreiben nicht blockiert)
-- `make doctor`
-- `make all`
+- `uv run pip-audit --strict`
+- `uv run pytest -q`
+- `uv run make doctor`
 - `pre-commit run --all-files`
 - `pre-commit run --hook-stage push`
+- Optional: `uv run make release-check` für den vollständigen Aggregationslauf
 - OpenAPI-Snapshot aktualisiert (falls API betroffen)
 
 ## 13) PR-Checkliste (muss im PR abgehakt sein)

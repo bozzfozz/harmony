@@ -21,13 +21,16 @@ execution and locking. Maintainers can bootstrap a fully verified checkout with 
 commands:
 
 ```bash
-uv sync
-uv run make all
-uv run make release-check
+uv sync --frozen
+uv run pip-audit --strict
+uv run pytest -q
 ```
 
-`uv sync` materialises the lockfile-projected virtual environment. Subsequent commands run
-inside that environment via `uv run`, ensuring local gates match CI behaviour.
+`uv sync --frozen` materialises the lockfile-projected virtual environment without
+resolving new versions. `uv run pip-audit --strict` and `uv run pytest -q` reproduce the
+standard local gate, so security audits and the test suite execute against the exact
+dependency set captured in `uv.lock`. Subsequent commands run inside that environment via
+`uv run`, ensuring local gates match CI behaviour.
 
 ## Highlights
 
@@ -160,10 +163,11 @@ the audience hubs in [`docs/user/README.md`](docs/user/README.md) and
 ## Dependency management
 
 [`uv.lock`](uv.lock) captures the exact dependency graph for the runtime and the
-development toolchain. `uv sync` installs the versions encoded in that lockfile, and
-`uv run` executes commands against the resulting environment. Typical workflows:
+development toolchain. `uv sync --frozen` installs the versions encoded in that lockfile,
+and `uv run` executes commands against the resulting environment. Typical workflows:
 
-- Run the test suite locally with `uv run pytest`.
+- Run the test suite locally with `uv run pytest -q`.
+- Run the security audit gate with `uv run pip-audit --strict`.
 - Execute any Make target (for example, `uv run make doctor` or `uv run make ui-smoke`).
 - Refresh dependencies after editing `pyproject.toml` with `uv lock --upgrade` and commit
   the updated lockfile alongside your source changes.
@@ -175,13 +179,15 @@ overrides are no longer required.
 
 ## Release gate
 
-Run `uv run make release-check` (or the legacy alias `uv run make Release`) before tagging
-or publishing a release. The target delegates to `scripts/dev/release_check.py`, which
-executes the full backend and UI gate (`uv run make all`), verifies documentation
-references (`uv run make docs-verify`), audits the locked dependencies via
-`uv run make pip-audit`, and finishes with the UI smoke test (`uv run make ui-smoke`).
-The script emits structured JSON logs and stops immediately after the first failing
-command to preserve the previous error context. Use `python
+Run the standard gate (`uv run pip-audit --strict` followed by `uv run pytest -q`) before
+tagging or publishing a release. These commands verify the locked dependency stack and
+exercise the full test suite without relying on Make wrappers. When you need the extended
+pipeline, use `uv run make release-check` (or the legacy alias `uv run make Release`). The
+target delegates to `scripts/dev/release_check.py`, which executes the full backend and UI
+gate (`uv run make all`), verifies documentation references (`uv run make docs-verify`),
+audits the locked dependencies via `uv run make pip-audit`, and finishes with the UI smoke
+test (`uv run make ui-smoke`). The script emits structured JSON logs and stops immediately
+after the first failing command to preserve the previous error context. Use `python
 scripts/dev/release_check.py --dry-run` to inspect the planned steps without executing
 them, or override the executed commands in CI with
 `RELEASE_CHECK_COMMANDS="<cmd1>\n<cmd2>"` for targeted verifications. Ensure

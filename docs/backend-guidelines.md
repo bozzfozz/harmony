@@ -50,7 +50,7 @@ Diese Guidelines definieren Standards für den Aufbau und die Pflege von Backend
 - API-Tests für Router-Endpunkte (Happy Path + Fehlerfälle).  
 - Worker-Tests mit Queue-Simulationen.  
 - Integration-Tests (End-to-End-Flows).  
-- `scripts/dev/test_py.sh` sowie `make all` laufen vor jedem Merge lokal.  
+- `scripts/dev/test_py.sh` bzw. `uv run pytest -q` und `uv run pip-audit --strict` laufen vor jedem Merge lokal; `uv run make all` bündelt optionale Zusatzprüfungen.
 
 ## 8. Dokumentation
 - API-Endpunkte mit Beispielen dokumentieren (Markdown, OpenAPI).

@@ -9,14 +9,14 @@ that mirror the CI smoke automation.
 
 The smoke checks require the production runtime packages `uvicorn` and
 `httpx` (plus their transitive dependencies). Materialise them with
-`uv sync`; offline environments can rely on the cached wheel workflow
+`uv sync --frozen`; offline environments can rely on the cached wheel workflow
 described below.
 
 ### Online Workflow
 
 1. From the repository root, install the backend requirements with uv:
    ```bash
-   uv sync
+   uv sync --frozen
    ```
 2. Run the smoke script via uv:
    ```bash
