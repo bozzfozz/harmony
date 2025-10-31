@@ -1,0 +1,4 @@
+[tool.pip-audit]
+ignore-vulns = ["GHSA-7f5h-v6xp-fcq8"]
+# Reminder: Re-evaluate waiver by 2025-12-31 and remove once FastAPI supports
+# Starlette >=0.49.
