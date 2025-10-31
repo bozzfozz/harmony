@@ -14,21 +14,20 @@ exposes the API on **port 8080** and stores all state in SQLite.
 > for feature-specific flows. No Node.js build step is required, but install Node.js ≥ 18 to
 > run the bundled UI bootstrap tests (see [`tests/ui/test_ui_bootstrap.py`](tests/ui/test_ui_bootstrap.py)).
 
-## Compatibility & Security Waiver (temporary)
+## Maintainer Onboarding
 
-This release pins the ASGI stack as follows:
+Harmony standardises on [uv](https://github.com/astral-sh/uv) for dependency resolution,
+execution and locking. Maintainers can bootstrap a fully verified checkout with three
+commands:
 
-- `fastapi==0.116.1`
-- `starlette>=0.40,<0.48.0`
+```bash
+uv sync
+uv run make all
+uv run make release-check
+```
 
-FastAPI 0.116.1 requires Starlette `<0.48.0`, while GHSA-7f5h-v6xp-fcq8 is only resolved in
-Starlette `>=0.49.1`. Harmony adds a **temporary** pip-audit waiver via
-[`/.pip-audit.toml`](.pip-audit.toml) to suppress the known advisory until FastAPI widens its
-Starlette compatibility range.
-
-**Removal gate:** As soon as FastAPI officially supports Starlette `>=0.49.1`, bump the pin to a
-patched release and delete the waiver. Track progress in [`CHANGELOG.md`](CHANGELOG.md) and
-[`TODO.md`](TODO.md).
+`uv sync` materialises the lockfile-projected virtual environment. Subsequent commands run
+inside that environment via `uv run`, ensuring local gates match CI behaviour.
 
 ## Highlights
 
@@ -160,26 +159,27 @@ the audience hubs in [`docs/user/README.md`](docs/user/README.md) and
 
 ## Dependency management
 
-Harmony standardises on [uv](https://github.com/astral-sh/uv) for dependency resolution,
-locking and virtual-environment management. Install **uv ≥ 0.7.0** and sync all
-development extras before running tooling or tests:
+[`uv.lock`](uv.lock) captures the exact dependency graph for the runtime and the
+development toolchain. `uv sync` installs the versions encoded in that lockfile, and
+`uv run` executes commands against the resulting environment. Typical workflows:
 
-```bash
-uv sync --group dev --group test
-uv run --no-sync --group dev --group test pytest
-```
+- Run the test suite locally with `uv run pytest`.
+- Execute any Make target (for example, `uv run make doctor` or `uv run make ui-smoke`).
+- Refresh dependencies after editing `pyproject.toml` with `uv lock --upgrade` and commit
+  the updated lockfile alongside your source changes.
+- Export temporary requirement lists for downstream systems with
+  `uv export --locked --format requirements.txt`.
 
-The lockfile lives in [`uv.lock`](uv.lock). Update it with `uv lock` whenever
-`pyproject.toml` changes and commit the refreshed lock alongside the source update.
-Use `uv export --locked --format requirements.txt` to generate ad-hoc requirement
-exports for environments that cannot run uv directly.
+The lockfile enforces resolved versions across CI and local machines, so manual pin
+overrides are no longer required.
 
 ## Release gate
 
-Run `make release-check` (or the legacy alias `make Release`) before tagging or publishing
-a release. The target delegates to `scripts/dev/release_check.py`, which executes the full
-backend and UI gate (`make all`), verifies documentation references (`make docs-verify`),
-audits the locked dependencies via `make pip-audit`, and finishes with the UI smoke test.
+Run `uv run make release-check` (or the legacy alias `uv run make Release`) before tagging
+or publishing a release. The target delegates to `scripts/dev/release_check.py`, which
+executes the full backend and UI gate (`uv run make all`), verifies documentation
+references (`uv run make docs-verify`), audits the locked dependencies via
+`uv run make pip-audit`, and finishes with the UI smoke test (`uv run make ui-smoke`).
 The script emits structured JSON logs and stops immediately after the first failing
 command to preserve the previous error context. Use `python
 scripts/dev/release_check.py --dry-run` to inspect the planned steps without executing
@@ -188,8 +188,8 @@ them, or override the executed commands in CI with
 [`pip-audit`](https://pypi.org/project/pip-audit/) can reach the internet so the security
 scan completes without downgrading the gate.
 
-When preparing the LinuxServer.io image, build it with `make image-lsio` and verify the
-runtime with `make smoke-lsio`. The smoke harness boots the freshly built container,
+When preparing the LinuxServer.io image, build it with `uv run make image-lsio` and verify the
+runtime with `uv run make smoke-lsio`. The smoke harness boots the freshly built container,
 waits up to 60 seconds for `/api/health/ready`, and confirms that `/config/harmony.db`
 exists. Capture the resulting logs for your release evidence alongside the other gates.
 

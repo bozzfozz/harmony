@@ -2,23 +2,23 @@
 
 ## Lokale Quality Gates
 
-Harmony nutzt den GitHub-Actions-Workflow [`release-check`](../../.github/workflows/release-check.yml), der `make release-check` inklusive Formatierung, Linting, Typprüfungen, Tests, Smoke, Dokumentations-Guard, Security-Scan und UI-Smoketest ausführt. Das optionale [`docker-image`](../../.github/workflows/docker-image.yml) Workflow wiederholt denselben Gate-Lauf, bevor Container-Builds entstehen. Maintainer reproduzieren die einzelnen Läufe lokal und dokumentieren nachvollziehbare Logs als Ergänzung zu den CI-Artefakten.
+Harmony nutzt den GitHub-Actions-Workflow [`release-check`](../../.github/workflows/release-check.yml), der `uv run make release-check` inklusive Formatierung, Linting, Typprüfungen, Tests, Smoke, Dokumentations-Guard, Security-Scan und UI-Smoketest ausführt. Das optionale [`docker-image`](../../.github/workflows/docker-image.yml) Workflow wiederholt denselben Gate-Lauf, bevor Container-Builds entstehen. Maintainer reproduzieren die einzelnen Läufe lokal und dokumentieren nachvollziehbare Logs als Ergänzung zu den CI-Artefakten.
 
 | Pflichtlauf | Zweck |
 | ------------ | ----- |
-| `make doctor` | Prüft Tooling (Python, Ruff, Pytest), führt `pip check`/`pip-audit` (offline freundlich) aus und verifiziert `/downloads` & `/music` via Schreib-/Lesetest. |
-| `make ui-guard` | Verhindert Platzhalterstrings in Templates, blockiert `/api/...` HTMX-Aufrufe und stellt sicher, dass statische Assets vorhanden sind. |
-| `make ui-smoke` | Startet die App lokal und ruft `/live`, `/ui` sowie UI-Fragmente ab; schlägt fehl, wenn HTML-Antworten Platzhalter enthalten oder kein `text/html` liefern. |
-| `make all` | Führt Formatierung, Lint, Dependency-Sync, Backend-Tests, Supply-Guard und Smoke-Test aus. |
-| `make release-check` | Ruft `scripts/dev/release_check.py` auf, kombiniert `make all`, `make docs-verify`, `make pip-audit` sowie einen abschließenden `make ui-smoke`, schreibt strukturierte Logs und stoppt beim ersten Fehler. Optional via `--dry-run` oder `RELEASE_CHECK_COMMANDS` parametrisierbar. |
-| `make image-lsio` / `make smoke-lsio` | Erstellt das LinuxServer.io-Image (`docker/Dockerfile.lsio`) und prüft es mit einem Healthcheck- und Datenbank-Bootstrap-Lauf. |
+| `uv run make doctor` | Prüft Tooling (Python, Ruff, Pytest), führt `pip check`/`pip-audit` (offline freundlich) aus und verifiziert `/downloads` & `/music` via Schreib-/Lesetest. |
+| `uv run make ui-guard` | Verhindert Platzhalterstrings in Templates, blockiert `/api/...` HTMX-Aufrufe und stellt sicher, dass statische Assets vorhanden sind. |
+| `uv run make ui-smoke` | Startet die App lokal und ruft `/live`, `/ui` sowie UI-Fragmente ab; schlägt fehl, wenn HTML-Antworten Platzhalter enthalten oder kein `text/html` liefern. |
+| `uv run make all` | Führt Formatierung, Lint, Dependency-Sync, Backend-Tests, Supply-Guard und Smoke-Test aus. |
+| `uv run make release-check` | Ruft `scripts/dev/release_check.py` auf, kombiniert `uv run make all`, `uv run make docs-verify`, `uv run make pip-audit` sowie einen abschließenden `uv run make ui-smoke`, schreibt strukturierte Logs und stoppt beim ersten Fehler. Optional via `--dry-run` oder `RELEASE_CHECK_COMMANDS` parametrisierbar. |
+| `uv run make image-lsio` / `uv run make smoke-lsio` | Erstellt das LinuxServer.io-Image (`docker/Dockerfile.lsio`) und prüft es mit einem Healthcheck- und Datenbank-Bootstrap-Lauf. |
 | `pre-commit run --all-files` | Spiegelt alle Commit-Hooks (`ruff-format`, `ruff`, lokale Skripte). |
 | `pre-commit run --hook-stage push` | Führt `scripts/dev/test_py.sh` vor dem Push aus. |
 
 ## Branch Protection & Evidence
 
 - Branch-Protection-Regeln verlangen einen erfolgreichen `release-check`-Status; zusätzliche Checks (z. B. `docker-image`) können je nach Repository-Einstellung erforderlich sein.
-- Der Workflow [`release-check`](../../.github/workflows/release-check.yml) läuft automatisch für Branches `release/**` sowie Tags `v*`, führt `make release-check` inklusive `docs-verify`, `pip-audit` und UI-Smoke-Test aus und validiert anschließend den Packaging-Pipeline-Run via `make package-verify`.
+- Der Workflow [`release-check`](../../.github/workflows/release-check.yml) läuft automatisch für Branches `release/**` sowie Tags `v*`, führt `uv run make release-check` inklusive `uv run make docs-verify`, `uv run make pip-audit` und UI-Smoke-Test aus und validiert anschließend den Packaging-Pipeline-Run via `uv run make package-verify`.
 - Die Workflow-Logs werden als Artefakt `release-check-logs` gespeichert und enthalten die Datei `reports/release-check/release-check.log` als revisionssicheren Nachweis. Zusätzlich archiviert der Workflow das Artefakt `release-packaging-artifacts` mit dem Inhalt des Verzeichnisses `dist/` für eine spätere manuelle Prüfung.
 - Maintainer prüfen die GitHub-Actions-Protokolle (`release-check` und ggf. `docker-image`) sowie die angehängten Logs der lokalen Pflichtläufe, bevor sie freigeben.
 - PRs ohne Wiring-/Removal-Report oder ohne Logs der Pflichtläufe dürfen nicht gemergt werden.
@@ -26,12 +26,14 @@ Harmony nutzt den GitHub-Actions-Workflow [`release-check`](../../.github/workfl
 
 ## Pre-commit Hooks
 
+Installiere die Hooks nach einem `uv sync` mit:
+
 ```bash
-pip install pre-commit
+uv tool install pre-commit
 pre-commit install
 pre-commit install --hook-type pre-push
-pre-commit run --all-files
-pre-commit run --hook-stage push
+uv run pre-commit run --all-files
+uv run pre-commit run --hook-stage push
 ```
 
 - Lokale Hooks rufen `scripts/dev/fmt.sh` und `scripts/dev/dep_sync_py.sh` auf.
@@ -39,16 +41,16 @@ pre-commit run --hook-stage push
 
 ## Manuelle Nightly-/Security-Checks
 
-- `make release-check` führt `pip-audit` bereits für alle im `uv.lock` fixierten Abhängigkeiten aus. Dokumentiere erkannte
+- `uv run make release-check` führt `pip-audit` bereits für alle im `uv.lock` fixierten Abhängigkeiten aus. Dokumentiere erkannte
   Schwachstellen direkt im PR, falls der Lauf fehlschlägt.
-- Generiere auf Wunsch SBOMs über `pip install cyclonedx-bom` und dokumentiere externe Bezugsquellen der Python-Abhängigkeiten.
+- Generiere auf Wunsch SBOMs über `uv tool install cyclonedx-bom` und dokumentiere externe Bezugsquellen der Python-Abhängigkeiten.
 
 ## Release Checklist
 
 1. Versionierung & CHANGELOG aktualisieren.
-2. `make release-check` (inkl. `docs-verify`, `pip-audit` und UI-Smoketest) und optionale Security-Scans erneut ausführen.
+2. `uv run make release-check` (inkl. `uv run make docs-verify`, `uv run make pip-audit` und UI-Smoketest) und optionale Security-Scans erneut ausführen.
 3. Packaging-Workflow nachvollziehen:
-   - Lokal `make package-verify` ausführen (führt `pip install .`, `pip wheel . -w dist/` und `python -m build` sequenziell mit Cleanups zwischen den Schritten aus).
+   - Lokal `uv run make package-verify` ausführen (führt `pip install .`, `pip wheel . -w dist/` und `python -m build` sequenziell mit Cleanups zwischen den Schritten aus).
    - Alternativ die CI-Artefakte (`release-packaging-artifacts`) des Workflows [`release-check`](../../.github/workflows/release-check.yml) prüfen, um den letzten erfolgreichen Build zu bestätigen.
 4. Releases/Tarballs manuell hochladen und Release Notes verfassen (Highlights, Breaking Changes, Rollback-Plan).
 

@@ -8,10 +8,9 @@ that mirror the CI smoke automation.
 ## Runtime Dependencies
 
 The smoke checks require the production runtime packages `uvicorn` and
-`httpx` (plus their transitive dependencies). They can be provided via
-standard `pip` installation when the environment has access to PyPI, or
-through a cached wheel directory when running in an offline or
-firewalled environment.
+`httpx` (plus their transitive dependencies). Materialise them with
+`uv sync`; offline environments can rely on the cached wheel workflow
+described below.
 
 ### Online Workflow
 
@@ -19,9 +18,9 @@ firewalled environment.
    ```bash
    uv sync
    ```
-2. Run the smoke script:
+2. Run the smoke script via uv:
    ```bash
-   bash scripts/dev/ui_smoke_local.sh
+   uv run make ui-smoke
    ```
 
 ### Offline / Air-Gapped Workflow
@@ -44,7 +43,7 @@ Prepare the wheel cache on a machine that **does** have internet access:
 4. Execute the smoke script. It will attempt to satisfy missing
    dependencies from the cache before falling back to PyPI:
    ```bash
-   bash scripts/dev/ui_smoke_local.sh
+   uv run make ui-smoke
    ```
 
 If both the cache lookup and the network install fail, the script aborts
