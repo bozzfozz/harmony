@@ -24,11 +24,24 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Set up uv
         uses: astral-sh/setup-uv@v3
 
       - name: Refresh uv.lock
-        run: uv lock --upgrade
+        run: |
+          uv lock --python 3.11 --python 3.12 --upgrade
+          uv lock --check
+
+      - name: Sync environment
+        run: uv sync --frozen
+
+      - name: Run tests
+        run: uv run pytest -q
 
       - name: Determine audit flag
         id: audit_flag
@@ -47,7 +60,7 @@ jobs:
         if: steps.audit_flag.outputs.run == 'true'
         run: |
           set -o pipefail
-          uv run pip-audit | tee pip-audit-output.txt
+          uv run pip-audit --strict | tee pip-audit-output.txt
         continue-on-error: true
 
       - name: Capture run metadata
@@ -80,10 +93,10 @@ jobs:
           fi
           cat <<'BODY' > pr-body.md
 ## Summary
-- Refresh `uv.lock` dependencies via `uv lock --upgrade`.
+- Refresh `uv.lock` dependencies via `uv lock --python 3.11 --python 3.12 --upgrade` followed by `uv lock --check`.
 
 ## Checklist
-- [x] Dependencies refreshed with `uv lock --upgrade`
+- [x] Dependencies refreshed with `uv lock --python 3.11 --python 3.12 --upgrade && uv lock --check`
 - [ ] `make doctor`
 - [ ] `make all`
 - [ ] `make pip-audit`
