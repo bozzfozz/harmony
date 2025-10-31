@@ -84,6 +84,30 @@ jobs:
           make release-check |& tee reports/release-check/release-check.log
           git diff --exit-code
 
+      - name: Check FastAPI/Starlette compatibility window
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+import sys
+
+try:
+    import fastapi  # noqa: F401
+    import starlette
+except Exception as exc:  # pragma: no cover - executed in CI
+    print(f"compat_check: import failed: {exc}")
+    sys.exit(0)
+
+from packaging.version import Version
+
+if Version(starlette.__version__) >= Version("0.49.1"):
+    print("compat_check: Starlette fix vorhanden – pip-audit Ignore kann entfernt werden.")
+    sys.exit(1)
+
+print(
+    "compat_check: Starlette < 0.49.1; pip-audit Ignore weiterhin erforderlich.",
+)
+PY
+
       - name: Verify packaging pipeline
         run: |
           set -euo pipefail
