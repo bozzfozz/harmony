@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 import xml.etree.ElementTree as ET
 
 import pytest
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_repo_root_str = str(_REPO_ROOT)
+if _repo_root_str not in sys.path:
+    sys.path.insert(0, _repo_root_str)
+
 from pytest_cov.plugin import HarmonyCoveragePlugin
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return _REPO_ROOT
 
 
 pytest_plugins = ("pytester",)
