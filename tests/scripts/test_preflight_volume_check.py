@@ -54,6 +54,8 @@ def test_ensure_directories_raises_when_directory_creation_fails(
 
     original_mkdir = pvc.Path.mkdir
 
+    monkeypatch.setattr(pvc, "_check_writable", lambda *args, **kwargs: True)
+
     def fake_mkdir(self: Path, *args, **kwargs):
         if self == downloads_dir:
             raise PermissionError("read-only")
