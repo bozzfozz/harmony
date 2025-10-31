@@ -58,7 +58,7 @@ else
 fi
 
 config_args=()
-config_file="pip-audit.toml"
+config_file=".pip-audit.toml"
 if [[ -f "$config_file" ]]; then
   if [[ -n $help_output && $help_output == *"--config"* ]]; then
     config_args=("-c" "$config_file")
