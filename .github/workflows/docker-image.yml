@@ -36,13 +36,9 @@ jobs:
         run: make supply-guard
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v1
+        uses: astral-sh/setup-uv@v3
         with:
           version: "0.7.0"
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
           python-version: "3.11"
 
       - name: Verify uv lockfile
@@ -50,7 +46,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --group dev --group test
+          uv sync --frozen --group dev --group test --project .
 
       - name: Run release checks (make release-check)
         env:
