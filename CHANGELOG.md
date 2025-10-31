@@ -4,7 +4,10 @@ All notable changes to Harmony are documented in this file.
 
 ## Unreleased
 
-- _No changes yet._
+### Changed
+- Switch dependency management to maintained range specifiers in `pyproject.toml`,
+  remove the redundant Starlette pin, and convert the requirements files into
+  `uv export` pointers so operators can generate locks on demand.
 
 ## v1.0.1 — Dependency compatibility patch
 
