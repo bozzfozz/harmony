@@ -17,7 +17,8 @@ ENV PATH="/root/.local/bin:${PATH}"
 COPY pyproject.toml uv.lock /tmp/app/
 
 RUN set -eux; \
-    uv pip install --system --requirements /tmp/app/uv.lock; \
+    cd /tmp/app; \
+    uv sync --frozen --no-dev --no-install-project --python python3 --system; \
     rm -rf /root/.cache/uv /tmp/app
 
 COPY app/ /app/
