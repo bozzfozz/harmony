@@ -6,6 +6,11 @@ cd "$ROOT_DIR"
 
 WHEEL_CACHE_DIR=${UI_SMOKE_WHEEL_DIR:-$ROOT_DIR/.cache/ui-smoke-wheels}
 
+if ! command -v uv >/dev/null 2>&1; then
+  echo "uv is required to prepare UI smoke runtime dependencies." >&2
+  exit 1
+fi
+
 if ! command -v python >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
   echo "python is required to run UI smoke checks." >&2
   exit 1
@@ -32,7 +37,7 @@ ensure_runtime_dependency() {
 
   if [[ $cache_has_artifacts -eq 1 ]]; then
     echo "Installing ${requirement} from cached wheels in $WHEEL_CACHE_DIR" >&2
-    if "$PYTHON_BIN" -m pip install --no-index --find-links="$WHEEL_CACHE_DIR" "$requirement"; then
+    if uv pip install --python "$PYTHON_BIN" --no-index --find-links="$WHEEL_CACHE_DIR" "$requirement"; then
       if $PYTHON_BIN -c "import ${module}" >/dev/null 2>&1; then
         return 0
       fi
@@ -43,7 +48,7 @@ ensure_runtime_dependency() {
   fi
 
   echo "Attempting to install ${requirement} from PyPI." >&2
-  if "$PYTHON_BIN" -m pip install "$requirement"; then
+  if uv pip install --python "$PYTHON_BIN" "$requirement"; then
     if $PYTHON_BIN -c "import ${module}" >/dev/null 2>&1; then
       return 0
     fi

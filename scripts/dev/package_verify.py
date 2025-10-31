@@ -7,24 +7,27 @@ from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, datetime
 import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+UV_BIN = os.environ.get("UV_BIN", "uv")
 
 COMMAND_SEQUENCE: tuple[tuple[str, ...], ...] = (
-    (sys.executable, "-m", "pip", "install", "--no-deps", "--force-reinstall", "."),
-    (sys.executable, "-m", "pip", "wheel", ".", "-w", "dist/"),
+    (UV_BIN, "pip", "install", "--python", sys.executable, "--no-deps", "--force-reinstall", "."),
+    (UV_BIN, "pip", "wheel", "--python", sys.executable, ".", "-w", "dist/"),
     (sys.executable, "-m", "build"),
 )
 
 BUILD_INSTALL_COMMAND: tuple[str, ...] = (
-    sys.executable,
-    "-m",
+    UV_BIN,
     "pip",
     "install",
+    "--python",
+    sys.executable,
     "build",
 )
 

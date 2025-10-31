@@ -146,14 +146,18 @@ check_directory DOWNLOADS_DIR /downloads "downloads"
 check_directory MUSIC_DIR /music "music"
 
 if [[ -n "$PYTHON_BIN" ]]; then
-  if output=$($PYTHON_BIN -m pip check 2>&1); then
-    log_pass "pip check"
+  if $have_uv; then
+    if output=$(uv pip check --python "$PYTHON_BIN" 2>&1); then
+      log_pass "uv pip check"
+    else
+      log_fail "uv pip check"
+      print_detail "$output"
+    fi
   else
-    log_fail "pip check"
-    print_detail "$output"
+    log_warn "uv pip check skipped (uv not available)"
   fi
 else
-  log_warn "pip check skipped (python missing)"
+  log_warn "uv pip check skipped (python missing)"
 fi
 
 if $have_uv; then
@@ -170,18 +174,16 @@ else
 fi
 
 if to_bool "${DOCTOR_PIP_REQS:-}"; then
-  if command -v pip-missing-reqs >/dev/null 2>&1; then
-    if output=$(pip-missing-reqs app tests 2>&1); then
+  if ! $have_uv; then
+    log_fail "Requirement guard tooling requires uv (install via 'uv sync --group dev')"
+  else
+    if output=$(uv run --locked --with pip-check-reqs pip-missing-reqs app tests 2>&1); then
       log_pass "pip-missing-reqs"
     else
       log_fail "pip-missing-reqs reported issues"
       print_detail "$output"
     fi
-  else
-    log_fail "pip-missing-reqs missing (required because DOCTOR_PIP_REQS=1)"
-  fi
 
-  if command -v pip-extra-reqs >/dev/null 2>&1; then
     tmp_dir=$(mktemp -d)
     runtime_requirements="$tmp_dir/runtime.txt"
     if ! export_requirements "$runtime_requirements"; then
@@ -200,7 +202,7 @@ if to_bool "${DOCTOR_PIP_REQS:-}"; then
         requirements_args+=(--requirements-file "$test_requirements")
       fi
 
-      if output=$(pip-extra-reqs "${requirements_args[@]}" app tests 2>&1); then
+      if output=$(uv run --locked --with pip-check-reqs pip-extra-reqs "${requirements_args[@]}" app tests 2>&1); then
         log_pass "pip-extra-reqs"
       else
         log_fail "pip-extra-reqs reported issues"
@@ -208,14 +210,12 @@ if to_bool "${DOCTOR_PIP_REQS:-}"; then
       fi
       rm -rf "$tmp_dir"
     fi
-  else
-    log_fail "pip-extra-reqs missing (required because DOCTOR_PIP_REQS=1)"
   fi
 else
-  if command -v pip-missing-reqs >/dev/null 2>&1 && command -v pip-extra-reqs >/dev/null 2>&1; then
-    log_warn "Requirement guard tooling detected but disabled (set DOCTOR_PIP_REQS=1 to enforce)"
+  if $have_uv; then
+    log_warn "Requirement guard tooling disabled (set DOCTOR_PIP_REQS=1 to enforce)"
   else
-    log_warn "Requirement guard tooling not installed; set DOCTOR_PIP_REQS=1 to enforce"
+    log_warn "Requirement guard tooling requires uv (install via 'uv sync --group dev')"
   fi
 fi
 
