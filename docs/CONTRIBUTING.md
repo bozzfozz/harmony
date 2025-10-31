@@ -4,6 +4,8 @@ Dieses Dokument richtet sich an alle Contributor:innen (Team & externe Partner)
 und ergänzt die Vorgaben aus `AGENTS.md` sowie dem PR-Template.
 
 ## Vor der Implementierung
+- Synchronisiere die Abhängigkeiten mit `uv sync`, damit lokale Läufe dem
+  CI-Stack entsprechen.
 - Erstelle ein Ticket auf Basis von [`docs/task-template.md`](task-template.md)
   und sammle dort Scope, Risiken und Tests.
 - Prüfe bestehende ADRs unter [`docs/architecture/adr/`](architecture/adr/).
@@ -16,8 +18,9 @@ und ergänzt die Vorgaben aus `AGENTS.md` sowie dem PR-Template.
   geprüft/aktualisiert“**. Damit bestätigst du, dass Änderungen an
   Komponenten/Integrationen in den relevanten Dokumenten nachgezogen wurden (siehe
   [`docs/architecture/README.md`](architecture/README.md)).
-- Führe `make doctor`, `make all` und `make docs-verify` lokal aus; hänge die
-  Logs im PR an.
+- Führe `uv run make doctor`, `uv run make all` und `uv run make docs-verify`
+  lokal aus; hänge die Logs im PR an. Ergänze eigenständige Testläufe mit
+  `uv run pytest`, wenn du gezielt Testmodule validierst.
 - Dokumentiere im PR-Text, welche ADRs oder Architekturdateien ergänzt bzw.
   angepasst wurden. Verlinke neue ADRs direkt.
 
