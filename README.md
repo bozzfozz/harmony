@@ -165,7 +165,7 @@ are introduced.
 
 ## Release gate
 
-Run `make release-check` before tagging or publishing a release. The target now delegates
+Run `make release-check` (or the legacy alias `make Release`) before tagging or publishing a release. The target now delegates
 to `scripts/dev/release_check.py`, which executes the full backend and UI gate (`make
 all`), verifies documentation references (`make docs-verify`), audits all
 `requirements*.txt` pins for known vulnerabilities via `make pip-audit`, and finishes
