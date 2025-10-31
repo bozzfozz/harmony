@@ -19,9 +19,14 @@ REQUIREMENTS_PATH = REPO_ROOT / "requirements.txt"
 DEFAULT_HEADER = ("# Runtime dependencies for Harmony backend",)
 
 # Dependencies that intentionally keep a range specifier instead of an exact pin.
-# Leave this list empty unless a dependency temporarily requires a range, and
-# document the rationale inline when doing so.
-RANGE_SPECIFIER_ALLOWLIST: frozenset[str] = frozenset()
+# Document each entry inline with the reason for the range.
+RANGE_SPECIFIER_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        # FastAPI 0.116.1 constrains Starlette to <0.48.0. We keep the matching
+        # range here until FastAPI allows the patched >=0.49.1 series.
+        "starlette",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -56,11 +61,22 @@ def _load_pyproject_dependencies(path: Path) -> list[Dependency]:
         canonical = canonicalize_name(requirement.name)
         specifiers = list(requirement.specifier)
         if canonical in RANGE_SPECIFIER_ALLOWLIST:
-            if len(specifiers) != 1:
+            if not specifiers:
                 raise DependencySyncError(
                     "Dependency "
-                    f"'{requirement.name}' must declare a single range specifier; "
-                    f"found '{requirement.specifier}'."
+                    f"'{requirement.name}' must declare at least one range specifier; "
+                    "no version constraints found."
+                )
+            invalid = [
+                spec.operator
+                for spec in specifiers
+                if spec.operator == "=="
+            ]
+            if invalid:
+                raise DependencySyncError(
+                    "Dependency "
+                    f"'{requirement.name}' must use range specifiers; "
+                    f"found equality constraint '{requirement.specifier}'."
                 )
         elif len(specifiers) != 1 or specifiers[0].operator != "==":
             raise DependencySyncError(

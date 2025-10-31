@@ -1,4 +1,5 @@
 # TODO
 
-- ✅ Upgrade Starlette wegen GHSA-7f5h-v6xp-fcq8, um das Range-Header-DoS zu beseitigen und das Release-Gate zu entblocken.
-- 🔄 Regelmäßige pip-audit Auswertung in PR-Checks etablieren.
+- [ ] Monitor FastAPI release notes for Starlette >=0.49.1 support.
+- [ ] Once FastAPI widens compatibility, bump Starlette to >=0.49.1 and drop the GHSA waiver.
+- [ ] Re-run pip-audit without the waiver to confirm a clean security report.

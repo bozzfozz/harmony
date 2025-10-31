@@ -58,7 +58,7 @@ ERROR
   exit 1
 }
 
-ensure_runtime_dependency uvicorn "uvicorn==0.30.1"
+ensure_runtime_dependency uvicorn "uvicorn==0.30.6"
 ensure_runtime_dependency httpx "httpx==0.27.0"
 
 readarray -t RUNTIME_VALUES < <($PYTHON_BIN <<'PY'

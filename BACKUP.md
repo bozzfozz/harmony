@@ -3,12 +3,13 @@
 ## requirements.txt
 ```text
 # Runtime dependencies for Harmony backend
-# FastAPI 0.116.1 is the latest release available on PyPI. Starlette is pinned
-# explicitly to 0.49.1 to address GHSA-7f5h-v6xp-fcq8.
+# FastAPI 0.116.1 is the latest release available on PyPI. Starlette uses a
+# temporary <0.48.0 range with a documented waiver for GHSA-7f5h-v6xp-fcq8 until
+# FastAPI allows >=0.49.1.
 
 fastapi==0.116.1
-starlette==0.49.1
-uvicorn==0.30.1
+starlette<0.48.0,>=0.40
+uvicorn==0.30.6
 sqlalchemy==2.0.31
 aiohttp==3.12.14
 aiosqlite==0.19.0
@@ -137,17 +138,23 @@ All notable changes to Harmony are documented in this file.
 
 ## Unreleased
 
-### Security
-- FastAPI auf 0.116.1 gepinnt und Starlette explizit auf 0.49.1 fixiert, um den
-  DoS-Fix GHSA-7f5h-v6xp-fcq8 bereitzuhalten und ungültige FastAPI-Pins zu
-  vermeiden.
+- _No changes yet._
 
-## v1.0.1 — Security patch
+## v1.0.1 — Dependency compatibility patch
+
+### Fixed
+- Align Starlette with FastAPI's `<0.48.0` constraint to resolve pip's resolver conflict while
+  keeping a documented waiver for GHSA-7f5h-v6xp-fcq8.
 
 ### Security
-- Aktualisiert Starlette auf 0.49.1 zur Behebung der öffentlich bekannten
-  DoS-Schwachstelle GHSA-7f5h-v6xp-fcq8 (Range-Header Parsing in FileResponse).
-- CI Release-Gate (`make pip-audit`) passiert wieder ohne Findings.
+- Track the scoped GHSA-7f5h-v6xp-fcq8 waiver in `.pip-audit.toml` with an explicit removal gate.
+
+### CI
+- Configure `scripts/dev/pip_audit.sh` to load `.pip-audit.toml` when running audits.
+
+### Tests
+- Add `tests/test_runtime_import.py` smoke checks to confirm FastAPI/Starlette imports and the
+  ASGI application entry point remain available.
 
 ## v1.0.0 — Initial release
 
@@ -173,6 +180,7 @@ All notable changes to Harmony are documented in this file.
 ```markdown
 # TODO
 
-- ✅ Upgrade Starlette wegen GHSA-7f5h-v6xp-fcq8, um das Range-Header-DoS zu beseitigen und das Release-Gate zu entblocken.
-- 🔄 Regelmäßige pip-audit Auswertung in PR-Checks etablieren.
+- [ ] Monitor FastAPI release notes for Starlette >=0.49.1 support.
+- [ ] Once FastAPI widens compatibility, bump Starlette to >=0.49.1 and drop the GHSA waiver.
+- [ ] Re-run pip-audit without the waiver to confirm a clean security report.
 ```

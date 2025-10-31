@@ -14,6 +14,22 @@ exposes the API on **port 8080** and stores all state in SQLite.
 > for feature-specific flows. No Node.js build step is required, but install Node.js ≥ 18 to
 > run the bundled UI bootstrap tests (see [`tests/ui/test_ui_bootstrap.py`](tests/ui/test_ui_bootstrap.py)).
 
+## Compatibility & Security Waiver (temporary)
+
+This release pins the ASGI stack as follows:
+
+- `fastapi==0.116.1`
+- `starlette>=0.40,<0.48.0`
+
+FastAPI 0.116.1 requires Starlette `<0.48.0`, while GHSA-7f5h-v6xp-fcq8 is only resolved in
+Starlette `>=0.49.1`. Harmony adds a **temporary** pip-audit waiver via
+[`/.pip-audit.toml`](.pip-audit.toml) to suppress the known advisory until FastAPI widens its
+Starlette compatibility range.
+
+**Removal gate:** As soon as FastAPI officially supports Starlette `>=0.49.1`, bump the pin to a
+patched release and delete the waiver. Track progress in [`CHANGELOG.md`](CHANGELOG.md) and
+[`TODO.md`](TODO.md).
+
 ## Highlights
 
 - **Harmony Download Manager (HDM):** Orchestrates watchlists, ingest jobs and
@@ -83,7 +99,7 @@ and see [`docs/install/docker.md`](docs/install/docker.md) for additional
 deployment notes.
 
 > The canonical backend version lives in [`app/version.py`](app/version.py).
-> Harmony v**1.0.0** exposes the same number via `/api/health/live`, `/live`, `/env`
+> Harmony v**1.0.1** exposes the same number via `/api/health/live`, `/live`, `/env`
 > and the OpenAPI schema so pinned deployments and health checks stay in sync.
 
 ## Minimal configuration
@@ -157,11 +173,6 @@ pip install -r requirements-dev.txt -r requirements-test.txt
 `requirements-test.txt` contains pytest and asyncio fixtures for the test suite. Regenerate
 the pins with [`pip-compile`](https://pip-tools.readthedocs.io/) when dependency upgrades
 are introduced.
-
-> **Security note:** FastAPI is pinned to 0.116.1, the latest PyPI release. Starlette is
-> locked to 0.49.1 explicitly to incorporate the GHSA-7f5h-v6xp-fcq8 Range header DoS
-> fix. Monitor upstream for additional 0.49.x hotfixes or behavioural changes before
-> adjusting the stack.
 
 ## Release gate
 

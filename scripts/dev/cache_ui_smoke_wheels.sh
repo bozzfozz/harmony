@@ -18,7 +18,7 @@ DEST_DIR=${1:-${UI_SMOKE_WHEEL_DIR:-$ROOT_DIR/.cache/ui-smoke-wheels}}
 mkdir -p "$DEST_DIR"
 
 PACKAGES=(
-  "uvicorn==0.30.1"
+  "uvicorn==0.30.6"
   "httpx==0.27.0"
 )
 

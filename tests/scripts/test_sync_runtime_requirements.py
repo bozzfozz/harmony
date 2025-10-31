@@ -34,7 +34,7 @@ def test_sync_generates_expected_requirements(
 [project]
 dependencies = [
     "fastapi==0.116.1",
-    "starlette==0.49.1",
+    "starlette>=0.40,<0.48.0",
     "anyio==3.7.1",
 ]
 """,
@@ -47,7 +47,7 @@ dependencies = [
     lines = [line for line in contents.splitlines() if line and not line.startswith("#")]
     assert lines == [
         "fastapi==0.116.1",
-        "starlette==0.49.1",
+        "starlette<0.48.0,>=0.40",
         "anyio==3.7.1",
     ]
 
@@ -62,7 +62,7 @@ def test_check_rejects_unexpected_dependency(
 [project]
 dependencies = [
     "fastapi==0.116.1",
-    "starlette==0.49.1",
+    "starlette>=0.40,<0.48.0",
     "anyio==3.7.1",
 ]
 """,
@@ -71,7 +71,7 @@ dependencies = [
     sync.sync_dependencies(check_only=False)
     original = requirements_path.read_text("utf-8")
     requirements_path.write_text(
-        original + "uvicorn==0.30.1\n",
+        original + "uvicorn==0.30.6\n",
         encoding="utf-8",
     )
 

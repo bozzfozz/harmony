@@ -4,17 +4,23 @@ All notable changes to Harmony are documented in this file.
 
 ## Unreleased
 
-### Security
-- FastAPI auf 0.116.1 gepinnt und Starlette explizit auf 0.49.1 fixiert, um den
-  DoS-Fix GHSA-7f5h-v6xp-fcq8 bereitzuhalten und ungültige FastAPI-Pins zu
-  vermeiden.
+- _No changes yet._
 
-## v1.0.1 — Security patch
+## v1.0.1 — Dependency compatibility patch
+
+### Fixed
+- Align Starlette with FastAPI's `<0.48.0` constraint to resolve pip's resolver conflict while
+  keeping a documented waiver for GHSA-7f5h-v6xp-fcq8.
 
 ### Security
-- Aktualisiert Starlette auf 0.49.1 zur Behebung der öffentlich bekannten
-  DoS-Schwachstelle GHSA-7f5h-v6xp-fcq8 (Range-Header Parsing in FileResponse).
-- CI Release-Gate (`make pip-audit`) passiert wieder ohne Findings.
+- Track the scoped GHSA-7f5h-v6xp-fcq8 waiver in `.pip-audit.toml` with an explicit removal gate.
+
+### CI
+- Configure `scripts/dev/pip_audit.sh` to load `.pip-audit.toml` when running audits.
+
+### Tests
+- Add `tests/test_runtime_import.py` smoke checks to confirm FastAPI/Starlette imports and the
+  ASGI application entry point remain available.
 
 ## v1.0.0 — Initial release
 
