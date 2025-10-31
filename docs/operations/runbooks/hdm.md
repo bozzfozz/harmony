@@ -212,11 +212,11 @@ Browser kann `127.0.0.1:8888` nicht erreichen.
    gilt als abgeschlossen, wenn `total=0` bzw. nur erwartbare Restfälle bestehen
    und keine neuen Dead-Letter-Ereignisse auftreten.
 
-## QA & Tests
+## QA & Runtime-Gates
 
-- Die historischen `tests/orchestrator/test_flow*.py`-Suiten wurden entfernt. Verwenden Sie die HDM-Regressionstests unter
-  `tests/orchestrator/` (inklusive `tests/orchestrator/hdm/`) für End-to-End-Abnahmen.
-- Das Guard-Skript `scripts/audit_wiring.py` blockiert Commits mit neuen `test_flow*`-Artefakten oder Referenzen. Analysieren Sie bei
+- Die historischen Orchestrator-Testläufe wurden archiviert. Nutzen Sie die Smoke-Gates (`uv run make smoke` und `uv run make ui-smoke`),
+  um Import- und Dashboard-Flows zu prüfen.
+- Das Guard-Skript `scripts/audit_wiring.py` blockiert Commits mit neuen Legacy-Artefakten oder Referenzen. Analysieren Sie bei
   einem roten Gate die Job-Ausgabe und bereinigen Sie die gemeldeten Dateien.
 
 ### Frontend-Assets

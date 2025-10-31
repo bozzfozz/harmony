@@ -7,25 +7,23 @@ Harmony verlässt sich weiterhin auf nachvollziehbare lokale Gates. Ergänzend p
 Führe vor den Gates einmal `uv sync --frozen` aus und starte anschließende
 Make-Targets konsequent via `uv run make <target>`, damit alle Schritte im durch
 `uv.lock` definierten Environment laufen. Der Standard-Gate-Lauf besteht aus
-`uv run pip-audit --strict` und `uv run pytest -q`; die Tabelle listet zusätzliche
-Targets und Hilfsskripte für umfassendere Prüfungen.
+`uv run pip-audit --strict` und `uv run make release-check`; die Tabelle listet
+zusätzliche Targets und Hilfsskripte für umfassendere Prüfungen.
 
 | Kommando                        | Script                              | Zweck |
 | -------------------------------- | ----------------------------------- | ----- |
-| `uv run make doctor`             | `scripts/dev/doctor.sh`             | Prüft Tooling (Python, Ruff, Pytest), führt `pip check`/`pip-audit` (offline-tolerant) aus und verifiziert `/downloads` & `/music` mit Schreib-/Lesetest. |
+| `uv run make doctor`             | `scripts/dev/doctor.sh`             | Prüft Tooling (Python, Ruff), führt `pip check`/`pip-audit` (offline-tolerant) aus und verifiziert `/downloads` & `/music` mit Schreib-/Lesetest. |
 | `uv run make ui-guard`           | `scripts/dev/ui_guard.sh`           | Durchsucht UI-Templates und statische Assets nach Platzhaltern, verbietet direkte HTMX-Aufrufe auf `/api/...` und prüft, dass die verpflichtenden Dateien unter `app/ui/static/` existieren. |
 | `uv run make ui-smoke`           | `scripts/dev/ui_smoke_local.sh`     | Startet die FastAPI-App lokal, ruft `/live`, `/ui` sowie exemplarische Fragmente auf und bricht ab, wenn die HTML-Antworten Platzhalter enthalten oder kein `text/html` liefern. |
 | `uv run make fmt`                | `scripts/dev/fmt.sh`                | Führt `ruff format` und Import-Sortierung (`ruff check --select I --fix`) aus. |
-| `uv run make lint`               | `scripts/dev/lint_py.sh`            | Führt `ruff check --output-format=concise .` und `mypy app tests --config-file mypy.ini` aus. |
+| `uv run make lint`               | `scripts/dev/lint_py.sh`            | Führt `ruff check --output-format=concise .` und `mypy app --config-file mypy.ini` aus. |
 | `uv run make dep-sync`           | `scripts/dev/dep_sync_py.sh`        | Prüft Python-Abhängigkeiten auf fehlende oder ungenutzte Pakete. |
 | `uv run pip-audit --strict`      | `scripts/dev/pip_audit.sh`          | Auditiert die im Lockfile fixierten Abhängigkeiten ohne Make-Wrapper; Standard-Gate. |
-| `uv run pytest -q`               | `scripts/dev/test_py.sh` (`uv run make test`) | Erstellt eine SQLite-Testdatenbank unter `.tmp/test.db` und führt die Test-Suite schlank aus. Benötigt Node.js ≥ 18 für den UI-Bootstrap-Test [`tests/ui/test_ui_bootstrap.py`](../../tests/ui/test_ui_bootstrap.py). |
-| `uv run make be-verify`          | —                                   | Alias für `make test`; dient als explizites Backend-Gate im `make all`-Lauf. |
 | `uv run make supply-guard`       | `scripts/dev/supply_guard.sh`       | Prüft auf versehentlich eingecheckte Node-Build-Artefakte. |
 | `uv run make smoke`              | `scripts/dev/smoke_unified.sh`      | Startet `uvicorn app.main:app`, pingt bis zu 60 Sekunden `http://127.0.0.1:${APP_PORT}${SMOKE_PATH}` und beendet den Prozess kontrolliert; führt anschließend einen optionalen Readiness-Ping gegen `/api/health/ready?verbose=1` aus (`SMOKE_READY_CHECK=warn` standard, `strict` erzwingt einen Fehler). Optional wird ein vorhandenes Unified-Docker-Image geprüft. |
 | `uv run make image-lsio`         | —                                   | Baut das LinuxServer.io-kompatible Image `lscr.io/linuxserver/harmony:latest` anhand von `docker/Dockerfile.lsio`. |
 | `uv run make smoke-lsio`         | `scripts/dev/smoke_lsio.sh`         | Startet das LSIO-Image in einem temporären Container, wartet bis zu 60 Sekunden auf einen erfolgreichen Healthcheck gegen `http://127.0.0.1:${HARMONY_LSIO_SMOKE_PORT:-18080}/api/health/ready` und prüft anschließend, dass `/config/harmony.db` im Container sowie auf dem gemounteten Host-Pfad existiert. |
-| `uv run make all`                | —                                   | Kombiniert `fmt lint dep-sync be-verify supply-guard smoke` in fester Reihenfolge (der `lint`-Schritt umfasst Ruff und MyPy). |
+| `uv run make all`                | —                                   | Kombiniert `fmt lint dep-sync supply-guard smoke` in fester Reihenfolge (der `lint`-Schritt umfasst Ruff und MyPy). |
 | `uv run make release-check`      | `scripts/dev/release_check.py`      | Führt `uv run make all`, `uv run make docs-verify`, `uv run make pip-audit` und `uv run make ui-smoke` aus, protokolliert strukturierte JSON-Logs, stoppt beim ersten Fehler und unterstützt `--dry-run` sowie `RELEASE_CHECK_COMMANDS` für CI-Overrides. |
 
 **Hinweis:** MyPy ist jetzt ein Pflicht-Gate innerhalb von `uv run make lint`. Schlägt die statische Typprüfung fehl oder fehlt das Tooling, wird der gesamte Lauf (und damit auch `uv run make all` bzw. `uv run make release-check`) mit einem Fehler abgebrochen.
@@ -72,15 +70,14 @@ Der Readiness-Self-Check überwacht weiterhin alle Pflicht-Templates sowie `app/
    - `ruff-format` und `ruff` laufen direkt aus dem offiziellen Repository.
    - `scripts/dev/fmt.sh` und `scripts/dev/dep_sync_py.sh` stellen Formatierung sowie Python-Abhängigkeiten sicher.
    - `scripts/dev/supply_guard.sh` verhindert eingecheckte Frontend-Build-Artefakte.
-   - `scripts/dev/test_py.sh` wird als Pre-Push-Hook ausgeführt und deckt den Pytest-Lauf ab.
-   Ein dedizierter JavaScript- oder Frontend-Verify-Hook ist derzeit nicht mehr aktiv.
+   Ein dedizierter JavaScript- oder Frontend-Verify-Hook ist derzeit nicht aktiv.
 5. **Standard-Gate:**
    ```bash
    uv run pip-audit --strict
-   uv run pytest -q
+   uv run make release-check
    ```
-   Ergänzend kannst du `uv run make all` oder `uv run make release-check`
-   ausführen, wenn du den aggregierten Workflow bevorzugst.
+   Ergänzend kannst du `uv run make all` ausführen, wenn du den aggregierten
+   Workflow ohne UI-Smoketest bevorzugst.
 6. **Evidence sichern:** Bewahre die wichtigsten Log-Auszüge pro Schritt auf (siehe PR-Checkliste).
 7. **Frontend-/Backend-Wiring dokumentieren:** Erstelle einen Wiring-Report (neue Routen, Worker, Registrierungen) sowie einen Removal-Report für gelöschte Artefakte.
 

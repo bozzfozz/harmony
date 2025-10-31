@@ -36,7 +36,7 @@ Der Guard bricht mit Exit-Code `1` ab, sobald ein Link auf eine nicht vorhandene
 Neue Schlüssel-Dokumente werden über die Konstanten `DEFAULT_DOC_PATHS` (Einzeldateien) bzw. `DEFAULT_DOC_DIRECTORIES` (Verzeichnisse) in `scripts/docs_reference_guard.py` registriert. Beim Hinzufügen neuer Bereiche:
 
 1. Die entsprechende Liste erweitern.
-2. Eine Regression mit `pytest tests/test_docs_reference_guard.py` absichern.
-3. `make docs-verify` lokal ausführen.
+2. `make docs-verify` lokal ausführen.
+3. Änderung im Review festhalten.
 
 > **Hinweis:** Für rein lokale oder temporäre Dokumente ist keine Registrierung nötig. Nur zentral veröffentlichte oder operativ relevante Inhalte sollten in den Standardlauf aufgenommen werden.

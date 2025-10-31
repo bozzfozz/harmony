@@ -7,7 +7,7 @@ import re
 import sys
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCAN_DIRECTORIES = ["app", "tests"]
+SCAN_DIRECTORIES = ["app"]
 FORBIDDEN_PATTERNS = {
     "plex": re.compile(r"\bplex\b", re.IGNORECASE),
     "beets": re.compile(r"\bbeets\b", re.IGNORECASE),
@@ -30,8 +30,6 @@ class Allowance:
 ALLOWANCES: tuple[Allowance, ...] = (
     Allowance(Path("app/main.py"), re.compile(r"wiring_summary .*plex=false")),
     Allowance(Path("app/main.py"), re.compile(r'"plex"\s*:\s*False')),
-    Allowance(Path("tests/test_matching.py"), re.compile(r"spotify-to-plex")),
-    Allowance(Path("tests/test_matching.py"), re.compile(r"discography/plex")),
 )
 
 

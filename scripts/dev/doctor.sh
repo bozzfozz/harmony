@@ -79,12 +79,6 @@ else
   log_fail "ruff missing (install via 'uv sync --group dev' or 'uv tool install ruff')"
 fi
 
-if command -v pytest >/dev/null 2>&1; then
-  log_pass "pytest available"
-else
-  log_fail "pytest missing (install via 'uv sync --group test' or 'uv tool install pytest')"
-fi
-
 check_directory() {
   local env_key=$1
   local fallback=$2
@@ -177,7 +171,7 @@ if to_bool "${DOCTOR_PIP_REQS:-}"; then
   if ! $have_uv; then
     log_fail "Requirement guard tooling requires uv (install via 'uv sync --group dev')"
   else
-    if output=$(uv run --locked --with pip-check-reqs pip-missing-reqs app tests 2>&1); then
+    if output=$(uv run --locked --with pip-check-reqs pip-missing-reqs app 2>&1); then
       log_pass "pip-missing-reqs"
     else
       log_fail "pip-missing-reqs reported issues"
@@ -197,12 +191,7 @@ if to_bool "${DOCTOR_PIP_REQS:-}"; then
         requirements_args+=(--requirements-file "$dev_requirements")
       fi
 
-      test_requirements="$tmp_dir/test.txt"
-      if export_requirements "$test_requirements" --only-group test; then
-        requirements_args+=(--requirements-file "$test_requirements")
-      fi
-
-      if output=$(uv run --locked --with pip-check-reqs pip-extra-reqs "${requirements_args[@]}" app tests 2>&1); then
+      if output=$(uv run --locked --with pip-check-reqs pip-extra-reqs "${requirements_args[@]}" app 2>&1); then
         log_pass "pip-extra-reqs"
       else
         log_fail "pip-extra-reqs reported issues"

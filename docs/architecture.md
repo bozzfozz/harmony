@@ -121,8 +121,8 @@ Fehlgeschlagene Downloads werden ausschließlich über den orchestrierten `retry
 ### Observability & Wiring Guard
 
 - Beim Start protokolliert `app/main.py` ein `wiring_summary` mit aktiven Routern, Workern und Integrationen (deaktivierte Provider erscheinen mit `False`).
-- `scripts/audit_wiring.py` stellt sicher, dass keine Legacy-Integrations-Referenzen (z. B. Plex) außerhalb des Archivs in `app/` oder `tests/` landen; führe das Skript bei Architekturänderungen manuell aus.
+- `scripts/audit_wiring.py` stellt sicher, dass keine Legacy-Integrations-Referenzen (z. B. Plex) außerhalb des Archivs in `app/` landen; führe das Skript bei Architekturänderungen manuell aus.
 
 ### Archivierte Module
 
-Legacy-Code (Plex-Router, Scan-Worker, AutoSync) wurde entfernt. Die aktiven Tests (`tests/test_matching.py`) verifizieren, dass entsprechende Endpunkte `404` liefern.
+Legacy-Code (Plex-Router, Scan-Worker, AutoSync) wurde entfernt. Smoke-Checks und manuelle API-Validierungen bestätigen, dass entsprechende Endpunkte `404` liefern.

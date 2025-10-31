@@ -21,7 +21,7 @@ und ergänzt die Vorgaben aus `AGENTS.md` sowie dem PR-Template.
 - Führe den Standard-Gate-Lauf lokal aus und dokumentiere die wichtigsten
   Konsolenausschnitte im PR:
   - `uv run pip-audit --strict`
-  - `uv run pytest -q`
+  - `uv run make release-check`
   Ergänze weitere Nachweise (`uv run make doctor`, `uv run make docs-verify`,
   `uv run make ui-smoke` etc.), wenn dein Change zusätzliche Oberflächen
   betrifft oder ein Release vorbereitet.

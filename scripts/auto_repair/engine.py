@@ -12,14 +12,9 @@ import subprocess
 import sys
 import textwrap
 
-from scripts.dev import pytest_env
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SUMMARY_PATH = REPO_ROOT / "reports" / "auto_repair_summary.md"
 TRACE_HEADER = "AUTO-REPAIR"  # prefix for log clarity
-
-PYTEST_COV_ISSUE_ID = "python.test.pytest_cov"
-PYTEST_COV_DESCRIPTION = "Install pytest-cov plugin when coverage options are supplied"
 
 
 @dataclass(slots=True)
@@ -234,68 +229,9 @@ class RuffAutoFixer(Fixer):
         )
 
 
-class PytestCovFixer(Fixer):
-    issue_id = PYTEST_COV_ISSUE_ID
-    description = PYTEST_COV_DESCRIPTION
-
-    def matches(self, context: RepairContext) -> bool:
-        output = context.combined_output.lower()
-        if "modulenotfounderror" in output or "module not found" in output:
-            return "pytest_cov" in output
-        if "unrecognized arguments" in output:
-            return "--cov" in output or "--cov-report" in output
-        return False
-
-    def apply(self, context: RepairContext, logger: ReasonTraceLogger) -> FixOutcome:
-        logger.emit(
-            step="DECIDE",
-            why="pytest coverage flags require pytest-cov plugin",
-            command=context.command.name,
-            nxt="FIX",
-        )
-        setup = pytest_env.ensure_pytest_cov(context.env.get("PYTEST_ADDOPTS"))
-
-        command_display = " ".join(setup.command) if setup.command else None
-        command_field = command_display or (
-            "pytest-cov builtin" if setup.installed else "pytest-cov unavailable"
-        )
-        logger.emit(
-            step="FIX",
-            why="Installing pytest-cov dependency"
-            if setup.command
-            else ("pytest-cov already installed" if setup.installed else "pytest-cov unavailable"),
-            command=command_field,
-            result="OK" if setup.installed else "ERROR",
-            nxt="VERIFY" if setup.installed else "DONE",
-        )
-
-        if setup.installed:
-            logger.emit(
-                step="VERIFY",
-                why="pytest-cov installation completed" if setup.command else "pytest-cov present",
-                command=command_field,
-                result="OK",
-                nxt="RE-RUN" if setup.command else "DONE",
-            )
-
-        warnings = [] if setup.installed else [setup.message]
-        commands = [command_display] if command_display else []
-        return FixOutcome(
-            issue_id=self.issue_id,
-            description=self.description,
-            success=setup.installed,
-            message=setup.message,
-            commands=commands,
-            warnings=warnings,
-            env_updates=dict(setup.env_updates),
-            resolved_without_rerun=False,
-        )
-
-
 ALL_FIXERS: Sequence[Fixer] = (
     RuffAutoFixer(),
     PipHashFixer(),
-    PytestCovFixer(),
 )
 
 
@@ -345,52 +281,6 @@ class AutoRepairEngine:
             raise ValueError(f"Unknown stage '{stage_name}'")
         stage = self._stages[stage_name]
         env_overrides: dict[str, str] = {}
-        if stage.name == "test":
-            setup = pytest_env.ensure_pytest_cov(os.getenv("PYTEST_ADDOPTS"))
-            command_display = " ".join(setup.command) if setup.command else None
-            env_overrides.update(setup.env_updates)
-            if setup.command:
-                self._logger.emit(
-                    step="SETUP",
-                    why="Ensuring pytest-cov dependency",
-                    command=command_display,
-                    result="OK" if setup.installed else "ERROR",
-                    nxt="SCAN" if setup.installed else "NONE",
-                )
-                status = "fixed" if setup.installed else ("warn" if self._warn_mode else "error")
-                self._summary.append(
-                    SummaryEntry(
-                        stage=stage.name,
-                        issue_id=PYTEST_COV_ISSUE_ID,
-                        description=PYTEST_COV_DESCRIPTION,
-                        status=status,
-                        message=setup.message,
-                        commands=(command_display,),
-                        warnings=() if setup.installed else (setup.message,),
-                    )
-                )
-            if setup.required and not setup.installed:
-                self._logger.emit(
-                    step="DONE",
-                    why="pytest-cov unavailable for test stage",
-                    command=command_display or "pytest-cov",
-                    result="WARN" if self._warn_mode else "ERROR",
-                    nxt="NONE",
-                )
-                if setup.command is None:
-                    self._summary.append(
-                        SummaryEntry(
-                            stage=stage.name,
-                            issue_id=PYTEST_COV_ISSUE_ID,
-                            description=PYTEST_COV_DESCRIPTION,
-                            status="warn" if self._warn_mode else "error",
-                            message=setup.message,
-                            commands=(),
-                            warnings=(setup.message,),
-                        )
-                    )
-                self._write_summary(stage_success=False)
-                return 0 if self._warn_mode else 1
         for attempt in range(1, self._max_iters + 1):
             self._logger.emit(
                 step="SCAN",
@@ -572,16 +462,7 @@ STAGE_DEFINITIONS: dict[str, RepairStage] = {
         commands=(
             RepairCommand(
                 name="mypy",
-                argv=["mypy", "app", "tests", "--config-file", "mypy.ini"],
-            ),
-        ),
-    ),
-    "test": RepairStage(
-        name="test",
-        commands=(
-            RepairCommand(
-                name="pytest",
-                argv=["pytest", "-q"],
+                argv=["mypy", "app", "--config-file", "mypy.ini"],
             ),
         ),
     ),

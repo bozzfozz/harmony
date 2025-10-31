@@ -45,12 +45,10 @@ Diese Guidelines definieren Standards für den Aufbau und die Pflege von Backend
 - **Audit-Logs/Activity Feed** für nachvollziehbare Änderungen pflegen.  
 - **Logs** strukturiert ausgeben und optional in Systeme wie Prometheus, Grafana, ELK weiterleiten.  
 
-## 7. Testing & lokale Gates
-- Unit-Tests für Services und Core-Clients.  
-- API-Tests für Router-Endpunkte (Happy Path + Fehlerfälle).  
-- Worker-Tests mit Queue-Simulationen.  
-- Integration-Tests (End-to-End-Flows).  
-- `scripts/dev/test_py.sh` bzw. `uv run pytest -q` und `uv run pip-audit --strict` laufen vor jedem Merge lokal; `uv run make all` bündelt optionale Zusatzprüfungen.
+## 7. Runtime-Gates & Smoke Checks
+- Fokus auf deterministische Lint-, Typ- und Smoke-Gates.
+- System-Surface-Smokes (`uv run make smoke` und `uv run make ui-smoke`) sichern APIs und UI ab.
+- `uv run pip-audit --strict` prüft Abhängigkeiten; `uv run make release-check` bündelt alle Pflichtläufe.
 
 ## 8. Dokumentation
 - API-Endpunkte mit Beispielen dokumentieren (Markdown, OpenAPI).
@@ -59,7 +57,7 @@ Diese Guidelines definieren Standards für den Aufbau und die Pflege von Backend
 - Changelog nach [Keep a Changelog](https://keepachangelog.com/).
 
 ## 9. Linting & Formatting
-- Vor jedem Commit sind die Python-Gates (`ruff format --check`, `ruff check --output-format=github`, `mypy`, `pytest`, `pip-audit`) lokal auszuführen.
+- Vor jedem Commit sind die Python-Gates (`ruff format --check`, `ruff check --output-format=github`, `mypy`, `pip-audit`) lokal auszuführen.
 - Finale Routine: `ruff format .`, `ruff check --select I --fix .`, anschließend `git diff --exit-code`. Ohne leeren Diff keine Doku-/CHANGELOG-/BACKUP-Schritte.
 - Ruff übernimmt Formatierung & Imports; zusätzliche Formatierungen nur nach Abstimmung (keine stillen Massenformate).
 - Verbleibende Hinweise (z. B. bewusst ungenutzte Importe) müssen manuell adressiert und dokumentiert werden (`# noqa`).

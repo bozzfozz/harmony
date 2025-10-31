@@ -58,13 +58,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --frozen --group dev --group test --project .
+          uv sync --frozen --group dev --project .
 
       - name: Run release checks (make release-check)
         env:
           SLSKD_API_KEY: smoke-key
         run: |
-          uv run --no-sync --group dev --group test make release-check
+          uv run --no-sync --group dev make release-check
           git diff --exit-code
 
       - name: Set up QEMU

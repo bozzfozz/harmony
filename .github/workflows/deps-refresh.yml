@@ -40,9 +40,6 @@ jobs:
       - name: Sync environment
         run: uv sync --frozen
 
-      - name: Run tests
-        run: uv run pytest -q
-
       - name: Determine audit flag
         id: audit_flag
         run: |

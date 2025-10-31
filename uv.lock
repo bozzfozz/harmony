@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [package.metadata]
-provides-extras = ["dev", "test"]
+provides-extras = ["dev"]
 
 [[package]]
 name = "fastapi"
@@ -133,21 +133,3 @@ name = "vulture"
 version = "2.10"
 source = { registry = "https://pypi.org/simple" }
 
-[[package]]
-name = "test"
-version = "0.0.0"
-source = { editable = "." }
-dependencies = [
-    { name = "pytest", constraint = ">=7.4,<8" },
-    { name = "pytest-asyncio", constraint = ">=0.23,<0.24" },
-]
-
-[[package]]
-name = "pytest"
-version = "7.4.4"
-source = { registry = "https://pypi.org/simple" }
-
-[[package]]
-name = "pytest-asyncio"
-version = "0.23.6"
-source = { registry = "https://pypi.org/simple" }

@@ -321,7 +321,7 @@ Das Drag&Drop-Panel erscheint innerhalb der Spotify-Seite, sobald `UI_FEATURE_SP
 - **Smoke**: `httpx.AsyncClient` Tests, die 200er für jede `/ui`-Route prüfen (HTML enthält erwartete Titel).
 - **HTMX-Fragmente**: Template-Render-Tests mit `TemplateResponse` + Snapshot der wichtigsten Partials (Downloads-Tabelle, Watchlist-Formulare).
 - **API-Contract-Mocks**: Fixtures, die REST-Aufrufe stubben (z. B. Download-Service) und HTML-Responses auf erwartete IDs prüfen.
-- **a11y Checks**: `pytest`-Helper, der WAI-ARIA-Rollen & `lang`-Attribut validiert; optional `pa11y` CLI gegen gerenderte Seiten.
+- **a11y Checks**: CLI-Helper, der WAI-ARIA-Rollen & `lang`-Attribut validiert; optional `pa11y` CLI gegen gerenderte Seiten.
 - **Performance**: Unit-Test, der CSS/JS Dateigrößen unter Budget hält.
 - **Security**: Login-/Logout-Test deckt Session-Cookie (`ui_session`) und CSRF-Header (`X-CSRF-Token`) ab; Rollen-Tests stellen sicher, dass Admin-only Aktionen geblockt werden.
 

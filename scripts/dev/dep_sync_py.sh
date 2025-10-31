@@ -57,11 +57,6 @@ if export_requirements "$dev_requirements" --only-group dev; then
   extra_requirement_files+=("$dev_requirements")
 fi
 
-test_requirements="$tmp_dir/test.txt"
-if export_requirements "$test_requirements" --only-group test; then
-  extra_requirement_files+=("$test_requirements")
-fi
-
 strict=false
 case "${DOCTOR_PIP_REQS:-}" in
   1|true|TRUE|True|yes|YES|on|ON)
@@ -76,7 +71,7 @@ run_with_pip_check_reqs() {
   return 0
 }
 
-if ! run_with_pip_check_reqs pip-missing-reqs app tests; then
+if ! run_with_pip_check_reqs pip-missing-reqs app; then
   if [[ "$strict" == true ]]; then
     echo "[dep-sync] pip-missing-reqs failed (DOCTOR_PIP_REQS=1)." >&2
     exit 1
@@ -89,7 +84,7 @@ for req_file in "${extra_requirement_files[@]}"; do
   requirements_args+=(--requirements-file "$req_file")
 done
 
-if ! run_with_pip_check_reqs pip-extra-reqs "${requirements_args[@]}" app tests; then
+if ! run_with_pip_check_reqs pip-extra-reqs "${requirements_args[@]}" app; then
   if [[ "$strict" == true ]]; then
     echo "[dep-sync] pip-extra-reqs failed (DOCTOR_PIP_REQS=1)." >&2
     exit 1

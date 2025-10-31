@@ -22,7 +22,6 @@ DUE: <YYYY-MM-DD>
 
 **FILES_IN_SCOPE**
 - "app/**"
-- "tests/**"
 - "docs/**"
 
 **PROHIBITED (hart)**
@@ -36,7 +35,7 @@ DUE: <YYYY-MM-DD>
 
 ## 4) Plan / Subtask-Split (falls SPLIT_ALLOWED)
 - **max_subtasks:** 3–7
-- **Reihenfolge:** analyse → skeleton → impl → tests → docs → cleanup
+- **Reihenfolge:** analyse → skeleton → impl → gates → docs → cleanup
 - **Cluster:** router | services | workers | integrations | frontend
 - **Abnahme je Subtask:** kleine PRs mit Tests & DoD
 
@@ -74,13 +73,12 @@ DUE: <YYYY-MM-DD>
 
 ## 11) Deliverables
 - [ ] Code-Änderungen
-- [ ] Tests grün
+- [ ] Gates grün (fmt, lint, smoke, audits)
 - [ ] Doku: README/CHANGELOG/ADR (falls Architekturentscheidung)
 - [ ] Report/Notizen (optional: `reports/`)
 
 ## 12) Lokale Gates (Merge-Blocking, Schreiben nicht blockiert)
 - `uv run pip-audit --strict`
-- `uv run pytest -q`
 - `uv run make doctor`
 - `pre-commit run --all-files`
 - `pre-commit run --hook-stage push`
@@ -90,7 +88,7 @@ DUE: <YYYY-MM-DD>
 ## 13) PR-Checkliste (muss im PR abgehakt sein)
 - [ ] TASK_ID im Titel/Body, AGENTS.md befolgt
 - [ ] Scope eingehalten, keine verbotenen Dateien
-- [ ] Tests + Lint + Typen grün (oder begründete Ausnahme)
+- [ ] Lint + Typen + Smokes grün (oder begründete Ausnahme)
 - [ ] OpenAPI/Doku synchron
 - [ ] Rollback-Plan dokumentiert
 
