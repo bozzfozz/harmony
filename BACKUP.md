@@ -3,11 +3,11 @@
 ## requirements.txt
 ```text
 # Runtime dependencies for Harmony backend
-# FastAPI 0.116.3 ships with Starlette ≥0.49.1 transitively, preserving the
-# GHSA-2c2j-9gv5-cj73 mitigation while incorporating the Range header DoS fix
-# from GHSA-7f5h-v6xp-fcq8 without an explicit Starlette pin.
+# FastAPI 0.116.1 is the latest release available on PyPI. Starlette is pinned
+# explicitly to 0.49.1 to address GHSA-7f5h-v6xp-fcq8.
 
-fastapi==0.116.3
+fastapi==0.116.1
+starlette==0.49.1
 uvicorn==0.30.1
 sqlalchemy==2.0.31
 aiohttp==3.12.14
@@ -137,7 +137,10 @@ All notable changes to Harmony are documented in this file.
 
 ## Unreleased
 
-- Noch keine Einträge.
+### Security
+- FastAPI auf 0.116.1 gepinnt und Starlette explizit auf 0.49.1 fixiert, um den
+  DoS-Fix GHSA-7f5h-v6xp-fcq8 bereitzuhalten und ungültige FastAPI-Pins zu
+  vermeiden.
 
 ## v1.0.1 — Security patch
 

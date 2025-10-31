@@ -158,10 +158,10 @@ pip install -r requirements-dev.txt -r requirements-test.txt
 the pins with [`pip-compile`](https://pip-tools.readthedocs.io/) when dependency upgrades
 are introduced.
 
-> **Security note:** FastAPI 0.116.3 now pulls in Starlette ≥0.49.1 transitively, which
-> keeps the ASGI surface deterministic while incorporating the GHSA-7f5h-v6xp-fcq8 Range
-> header DoS fix without a direct Starlette pin. Monitor upstream for additional 0.49.x
-> hotfixes or behavioural changes before adjusting the stack.
+> **Security note:** FastAPI is pinned to 0.116.1, the latest PyPI release. Starlette is
+> locked to 0.49.1 explicitly to incorporate the GHSA-7f5h-v6xp-fcq8 Range header DoS
+> fix. Monitor upstream for additional 0.49.x hotfixes or behavioural changes before
+> adjusting the stack.
 
 ## Release gate
 
