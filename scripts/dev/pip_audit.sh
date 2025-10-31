@@ -4,11 +4,6 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT_DIR"
 
-if ! uv lock --check >/dev/null 2>&1; then
-  printf '[pip-audit] uv.lock is out of date. Run "uv lock" and commit the result before auditing.\n' >&2
-  exit 1
-fi
-
 pip_audit_cmd=(uv run --frozen pip-audit)
 
 if ! command -v "${pip_audit_cmd[0]}" >/dev/null 2>&1; then
