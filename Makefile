@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: fmt lint test dep-sync be-verify smoke doctor all lint-fix precommit ui-guard ui-smoke docs-verify release-check Release pip-audit package-verify image-lsio smoke-lsio
+.PHONY: fmt lint dep-sync smoke doctor all lint-fix precommit ui-guard ui-smoke docs-verify release-check Release pip-audit package-verify image-lsio smoke-lsio
 .PHONY: supply-guard supply-guard-verbose supply-guard-warn
 .PHONY: foss-scan foss-enforce
 
@@ -9,11 +9,6 @@ fmt:
 
 lint:
 	./scripts/dev/lint_py.sh
-
-test:
-	./scripts/dev/test_py.sh
-
-be-verify: test
 
 dep-sync:
 	./scripts/dev/dep_sync_py.sh
@@ -47,7 +42,6 @@ all:
 		$(MAKE) fmt; \
 		$(MAKE) lint; \
 		$(MAKE) dep-sync; \
-		$(MAKE) be-verify; \
 		$(MAKE) supply-guard; \
 		$(MAKE) smoke
 

@@ -118,7 +118,7 @@ Alle Endpunkte folgen dem Schema `https://<host>/api/v1/<route>` und liefern JSO
 
 ## OpenAPI
 
-`tests/snapshots/openapi.json` enthält einen Snapshot der generierten OpenAPI-Spezifikation. Vergleiche Änderungen lokal, indem du `python - <<'PY'` verwendest oder `python -m app.main` startest und `app.openapi()` inspizierst.
+Erzeuge bei Bedarf einen aktuellen OpenAPI-Snapshot, indem du `python -m app.main` startest und `app.openapi()` inspizierst oder den Inhalt via `python - <<'PY'` in eine Datei schreibst.
 
 ## HTTP-Caching
 

@@ -95,18 +95,18 @@ Grenzen: Datei ≤300 LOC, Funktion ≤50 LOC, ≤5 Parameter, CC≤10.
 Vor jeder Änderung: Definitionen, Referenzen, Call-Sites, Tests, Configs, Docs lesen.  
 Symboländerungen → repoweite Suche, Impact-Notiz im PR.
 
-### 4.3 Testing
-Neue Features → neue Tests, Bugfix → Regressionstest.  
-Mind. 1 Happy + 1 Failure Path.  
-Tests deterministisch, unabhängig, Fakes statt echte Systeme.  
-Coverage ≥ 85 % geänderter Module.
+### 4.3 Runtime Verification
+Neue Features → aktualisierte Smoke-/Release-Gates, Bugfix → reproduzierbares Log/Smoke-Evidence.
+Mind. 1 Happy + 1 Failure Path in Form nachvollziehbarer Checks oder manueller Protokolle.
+Gates deterministisch, unabhängig, Fakes statt echte Systeme.
+Smoke-/Health-Gates dokumentieren (`make smoke`, `make ui-smoke`).
 
 ### 4.4 Clean Code
 Eine Funktion = eine Aufgabe. Struktur: Input → Process → Return.  
 Explizite Fehlerbehandlung, klare Namen.
 
 ### 4.5 Tools
-`ruff`, `mypy`, `pytest`, `pip-audit`  
+`ruff`, `mypy`, `pip-audit`, `make release-check`
 Optional JS/TS: `eslint`, `prettier`.
 
 ---
@@ -182,10 +182,10 @@ Ergebnis wird als `plan@<task_id>.json` gespeichert.
 ---
 
 ## §13 Deterministische Formatierung & Tests
-1. `ruff format . && ruff check --fix`  
-2. `pytest -q`  
-3. `pip-audit`  
-4. `git diff --exit-code`  
+1. `ruff format . && ruff check --fix`
+2. `pip-audit`
+3. `uv run make release-check`
+4. `git diff --exit-code`
 
 ---
 

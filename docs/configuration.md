@@ -258,7 +258,6 @@ configuration payloads. They follow the rules below:
 | Variable | Default | Example | Notes |
 | --- | --- | --- | --- |
 | `APP_PORT` aliases | _(n/a)_ | `PORT=8080` | Legacy aliases (`PORT`, `UVICORN_PORT`, `SERVICE_PORT`, `WEB_PORT`, `FRONTEND_PORT`) are auto-normalised to `APP_PORT`. |
-| `APP_ENV` flags | _(n/a)_ | `PYTEST_CURRENT_TEST` | `PYTEST_CURRENT_TEST` is auto-set by pytest to signal test mode. |
 | `SMOKE_PATH` | `/api/health/live` | `/api/health/live` | Used by smoke scripts; keep aligned with the liveness probe. |
 
 Refer to [`app/config.py`](../app/config.py) for the authoritative defaults and type

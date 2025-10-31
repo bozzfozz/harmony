@@ -317,8 +317,6 @@ KNOWN_LICENSES = {
     'aiosqlite': 'MIT',
     'spotipy': 'MIT',
     'pydantic': 'MIT',
-    'pytest': 'MIT',
-    'pytest-asyncio': 'Apache-2.0',
     'httpx': 'BSD-3-Clause',
     'psutil': 'BSD-3-Clause',
     'mutagen': 'GPL-2.0-or-later',

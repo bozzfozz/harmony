@@ -87,4 +87,3 @@ Jede Fehlerantwort enthält den Header `X-Debug-Id` zur Log-Korrelation. Ist die
 }
 ```
 
-Weitere Beispiele finden sich in `tests/data/error_examples.json`.

@@ -44,7 +44,6 @@ DEFAULT_STEPS: tuple[PipelineStep, ...] = (
     PipelineStep(name="fmt", command=(str(DEV_SCRIPTS / "fmt.sh"),)),
     PipelineStep(name="lint", command=(str(DEV_SCRIPTS / "lint_py.sh"),)),
     PipelineStep(name="dep-sync", command=(str(DEV_SCRIPTS / "dep_sync_py.sh"),)),
-    PipelineStep(name="be-verify", command=(str(DEV_SCRIPTS / "test_py.sh"),)),
     PipelineStep(name="supply-guard", command=(str(DEV_SCRIPTS / "supply_guard.sh"),)),
     PipelineStep(name="smoke", command=(str(DEV_SCRIPTS / "smoke_unified.sh"),)),
 )

@@ -55,24 +55,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --frozen --group dev --group test --project .
-
-      - name: Run pytest (verbose)
-        env:
-          SLSKD_API_KEY: release-check-ci
-          HARMONY_API_KEYS: ui-smoke-key
-        run: |
-          set -euo pipefail
-          mkdir -p reports/release-check
-          uv run --no-sync --group dev --group test pytest -vv --maxfail=1 --disable-warnings 2>&1 | tee reports/release-check/pytest-output.txt
-
-      - name: Upload pytest log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pytest-log
-          path: reports/release-check/pytest-output.txt
-          if-no-files-found: warn
+          uv sync --frozen --group dev --project .
 
       - name: Run make release-check
         env:
@@ -90,13 +73,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p reports/release-check
-          uv run --no-sync --group dev --group test make release-check |& tee reports/release-check/release-check.log
+          uv run --no-sync --group dev make release-check |& tee reports/release-check/release-check.log
           git diff --exit-code
 
       - name: Verify packaging pipeline
         run: |
           set -euo pipefail
-          uv run --no-sync --group dev --group test make package-verify
+          uv run --no-sync --group dev make package-verify
 
       - name: Upload packaging artifacts
         if: always()

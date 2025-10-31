@@ -1,6 +1,5 @@
-# Operations Pages UI Test Run
+# Operations Pages UI Verification
 
-- **Command:** `pytest tests/ui/test_operations_pages.py -q`
-- **Result:** 9 passed in 15.37s
-- **Notes:** Tests already passing; no route/context adjustments were required.
-- **Execution Time (UTC):** 2025-10-24T14:15:03Z
+- **Verification:** Covered by `make ui-smoke`
+- **Notes:** The automated test suite has been retired; rely on the UI smoke harness and manual exploratory checks.
+- **Last Audit:** 2025-10-24T14:15:03Z

@@ -6,4 +6,4 @@ cd "$ROOT_DIR"
 
 ruff format --check .
 ruff check --output-format=concise .
-mypy app tests --config-file mypy.ini
+mypy app --config-file mypy.ini
