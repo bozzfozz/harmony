@@ -48,10 +48,36 @@ jobs:
           pip install -r requirements-dev.txt -r requirements-test.txt
           pip install -e .
 
+      - name: Run pytest (verbose)
+        env:
+          SLSKD_API_KEY: release-check-ci
+          HARMONY_API_KEYS: ui-smoke-key
+        run: |
+          set -euo pipefail
+          mkdir -p reports/release-check
+          pytest -vv --maxfail=1 --disable-warnings 2>&1 | tee reports/release-check/pytest-output.txt
+
+      - name: Upload pytest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-log
+          path: reports/release-check/pytest-output.txt
+          if-no-files-found: warn
+
       - name: Run make release-check
         env:
           SLSKD_API_KEY: release-check-ci
           HARMONY_API_KEYS: ui-smoke-key
+          RELEASE_CHECK_COMMANDS: |
+            make fmt
+            make lint
+            make dep-sync
+            make supply-guard
+            make smoke
+            make docs-verify
+            make pip-audit
+            make ui-smoke
         run: |
           set -euo pipefail
           mkdir -p reports/release-check
