@@ -105,13 +105,18 @@ def test_ready_reports_database_file(
 
 
 def _base_ready_env(
-    *, downloads_dir: Path, music_dir: Path, idempotency_path: Path
+    *,
+    downloads_dir: Path,
+    music_dir: Path,
+    idempotency_path: Path,
+    create_database: bool = True,
 ) -> dict[str, str]:
     downloads_dir.mkdir(parents=True, exist_ok=True)
     music_dir.mkdir(parents=True, exist_ok=True)
     idempotency_path.parent.mkdir(parents=True, exist_ok=True)
     database_path = downloads_dir / "ready.db"
-    database_path.touch()
+    if create_database:
+        database_path.touch()
     return {
         "SPOTIFY_CLIENT_ID": "client",
         "SPOTIFY_CLIENT_SECRET": "secret",
@@ -156,6 +161,31 @@ def test_ready_reports_idempotency_sqlite(tmp_path: Path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=1)
+
+
+def test_ready_creates_missing_sqlite_database(tmp_path: Path) -> None:
+    downloads_dir = tmp_path / "downloads"
+    music_dir = tmp_path / "music"
+    idempotency_db = tmp_path / "state" / "idempotency.db"
+    runtime_env = _base_ready_env(
+        downloads_dir=downloads_dir,
+        music_dir=music_dir,
+        idempotency_path=idempotency_db,
+        create_database=False,
+    )
+    database_path = downloads_dir / "ready.db"
+    assert not database_path.exists()
+
+    runtime_env["INTEGRATIONS_ENABLED"] = "spotify"
+
+    report = aggregate_ready(runtime_env=runtime_env)
+
+    assert report.ok
+    database_check = report.checks["database"]
+    assert database_check["mode"] == "file"
+    assert database_check["exists"] is True
+    assert database_check["writable"] is True
+    assert database_path.exists()
 
 
 def test_ready_reports_invalid_idempotency_backend(tmp_path: Path) -> None:

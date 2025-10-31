@@ -212,6 +212,31 @@ def _probe_file_writable(path: Path) -> bool:
         return False
 
 
+def _ensure_sqlite_database(path: Path) -> tuple[bool, dict[str, Any]]:
+    """Ensure a SQLite database file exists at ``path``."""
+
+    info: dict[str, Any] = {"path": str(path)}
+    pre_exists = path.exists()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        info["error"] = str(exc)
+        info["errno"] = getattr(exc, "errno", None)
+        return False, info
+
+    try:
+        with sqlite3.connect(path, timeout=0.25) as connection:
+            connection.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.Error as exc:
+        info["error"] = str(exc)
+        info["sqlite_error"] = exc.__class__.__name__
+        info["sqlite_code"] = getattr(exc, "sqlite_errorcode", None)
+        return False, info
+
+    info["created"] = not pre_exists and path.exists()
+    return True, info
+
+
 def _probe_idempotency_sqlite(path: Path) -> tuple[bool, dict[str, Any]]:
     info: dict[str, Any] = {"path": str(path)}
     try:
@@ -636,15 +661,42 @@ def aggregate_ready(
                         )
                 else:
                     database["writable"] = False
+                    ensure_details: dict[str, Any] | None = None
                     if database_required:
-                        issues.append(
-                            ReadyIssue(
-                                component="database",
-                                message="Database file does not exist",
-                                exit_code=EX_OSERR,
-                                details={"path": str(database_path)},
+                        success, ensure_details = _ensure_sqlite_database(database_path)
+                        if success:
+                            exists = database_path.exists()
+                            database["exists"] = exists
+                            if exists:
+                                writable = _probe_file_writable(database_path)
+                                database["writable"] = writable
+                                if not writable:
+                                    issues.append(
+                                        ReadyIssue(
+                                            component="database",
+                                            message="Database file is not writable",
+                                            exit_code=EX_OSERR,
+                                            details={"path": str(database_path)},
+                                        )
+                                    )
+                            else:
+                                issues.append(
+                                    ReadyIssue(
+                                        component="database",
+                                        message="Database file does not exist",
+                                        exit_code=EX_OSERR,
+                                        details={"path": str(database_path)},
+                                    )
+                                )
+                        else:
+                            issues.append(
+                                ReadyIssue(
+                                    component="database",
+                                    message="Database file could not be created",
+                                    exit_code=EX_OSERR,
+                                    details=ensure_details,
+                                )
                             )
-                        )
     checks["database"] = database
 
     idempotency: dict[str, Any] = {}
