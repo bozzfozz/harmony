@@ -75,7 +75,7 @@ def _make_context(
     )
 
 
-def test_pytest_cov_fixer_installs_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pytest_cov_fixer_handles_successful_setup(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
     def _patched_ensure(addopts: str | None = None) -> pytest_env.PytestCovSetupResult:
@@ -83,8 +83,8 @@ def test_pytest_cov_fixer_installs_plugin(monkeypatch: pytest.MonkeyPatch) -> No
         return pytest_env.PytestCovSetupResult(
             required=True,
             installed=True,
-            command=("pip", "install", "pytest-cov==4.1.0"),
-            message="Installed pytest-cov",
+            command=None,
+            message="pytest-cov already available",
             env_updates={"PYTEST_ADDOPTS": "--cov=app -p pytest_cov.plugin"},
         )
 
@@ -98,7 +98,7 @@ def test_pytest_cov_fixer_installs_plugin(monkeypatch: pytest.MonkeyPatch) -> No
     outcome = fixer.apply(context, _SilentLogger())
 
     assert outcome.success is True
-    assert outcome.commands == ["pip install pytest-cov==4.1.0"]
+    assert outcome.commands == []
     assert captured["addopts"] == "--cov=app"
 
 
@@ -107,8 +107,8 @@ def test_pytest_cov_fixer_reports_failure(monkeypatch: pytest.MonkeyPatch) -> No
         return pytest_env.PytestCovSetupResult(
             required=True,
             installed=False,
-            command=("pip", "install", "pytest-cov"),
-            message="error: network down",
+            command=None,
+            message="External pytest-cov package detected; uninstall it",
             env_updates={},
         )
 
@@ -122,9 +122,9 @@ def test_pytest_cov_fixer_reports_failure(monkeypatch: pytest.MonkeyPatch) -> No
     outcome = fixer.apply(context, _SilentLogger())
 
     assert outcome.success is False
-    assert outcome.commands == ["pip install pytest-cov"]
-    assert "error: network down" in outcome.message
-    assert outcome.warnings
+    assert outcome.commands == []
+    assert "External pytest-cov" in outcome.message
+    assert outcome.warnings == [outcome.message]
 
 
 def test_pytest_cov_fixer_matches_modulenotfound() -> None:
@@ -149,8 +149,8 @@ def test_engine_aborts_when_pytest_cov_setup_fails(monkeypatch: pytest.MonkeyPat
     failure = pytest_env.PytestCovSetupResult(
         required=True,
         installed=False,
-        command=("pip", "install", "pytest-cov"),
-        message="network down",
+        command=None,
+        message="External pytest-cov package detected",
         env_updates={},
     )
 
