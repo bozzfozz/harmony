@@ -4,6 +4,11 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT_DIR"
 
+if ! command -v uv >/dev/null 2>&1; then
+  echo "[dep-sync] uv is required to run dependency guards." >&2
+  exit 1
+fi
+
 ensure_uv_lock() {
   if uv lock --check >/dev/null 2>&1; then
     return
@@ -64,26 +69,30 @@ case "${DOCTOR_PIP_REQS:-}" in
     ;;
 esac
 
-if ! command -v pip-missing-reqs >/dev/null 2>&1; then
+run_with_pip_check_reqs() {
+  if ! uv run --locked --with pip-check-reqs "$@"; then
+    return 1
+  fi
+  return 0
+}
+
+if ! run_with_pip_check_reqs pip-missing-reqs app tests; then
   if [[ "$strict" == true ]]; then
-    echo "pip-missing-reqs is required when DOCTOR_PIP_REQS=1. Install it via 'pip install pip_check_reqs'." >&2
+    echo "[dep-sync] pip-missing-reqs failed (DOCTOR_PIP_REQS=1)." >&2
     exit 1
   fi
-  echo "[dep-sync] pip-missing-reqs not installed; skipping missing-requirements scan." >&2
-else
-  pip-missing-reqs app tests
+  echo "[dep-sync] Unable to run pip-missing-reqs; skipping missing-requirements scan." >&2
 fi
 
-if ! command -v pip-extra-reqs >/dev/null 2>&1; then
+requirements_args=(--requirements-file "$runtime_requirements")
+for req_file in "${extra_requirement_files[@]}"; do
+  requirements_args+=(--requirements-file "$req_file")
+done
+
+if ! run_with_pip_check_reqs pip-extra-reqs "${requirements_args[@]}" app tests; then
   if [[ "$strict" == true ]]; then
-    echo "pip-extra-reqs is required when DOCTOR_PIP_REQS=1. Install it via 'pip install pip_check_reqs'." >&2
+    echo "[dep-sync] pip-extra-reqs failed (DOCTOR_PIP_REQS=1)." >&2
     exit 1
   fi
-  echo "[dep-sync] pip-extra-reqs not installed; skipping extra-requirements scan." >&2
-else
-  requirements_args=(--requirements-file "$runtime_requirements")
-  for req_file in "${extra_requirement_files[@]}"; do
-    requirements_args+=(--requirements-file "$req_file")
-  done
-  pip-extra-reqs "${requirements_args[@]}" app tests
+  echo "[dep-sync] Unable to run pip-extra-reqs; skipping extra-requirements scan." >&2
 fi

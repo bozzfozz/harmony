@@ -3,6 +3,11 @@ set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 
+if ! command -v uv >/dev/null 2>&1; then
+  echo "uv is required to download runtime wheels." >&2
+  exit 1
+fi
+
 if ! command -v python >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
   echo "python is required to download runtime wheels." >&2
   exit 1
@@ -28,7 +33,8 @@ Using python executable: $PYTHON_BIN
 Packages: ${PACKAGES[*]}
 INFO
 
-"$PYTHON_BIN" -m pip download \
+uv pip download \
+  --python "$PYTHON_BIN" \
   --dest "$DEST_DIR" \
   "${PACKAGES[@]}"
 
