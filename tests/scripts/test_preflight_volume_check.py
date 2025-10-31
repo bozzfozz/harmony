@@ -52,16 +52,23 @@ def test_ensure_directories_raises_when_directory_creation_fails(
     downloads_dir = tmp_path / "downloads"
     music_dir = tmp_path / "music"
 
-    original_mkdir = pvc.Path.mkdir
+    original_mkdir = Path.mkdir
 
-    monkeypatch.setattr(pvc, "_check_writable", lambda *args, **kwargs: True)
+    def fake_apply_ownership(path: Path, puid: int, pgid: int) -> None:
+        return None
+
+    def fake_check_writable(path: Path, puid: int, pgid: int) -> bool:
+        return True
+
+    monkeypatch.setattr(pvc, "_apply_ownership", fake_apply_ownership)
+    monkeypatch.setattr(pvc, "_check_writable", fake_check_writable)
 
     def fake_mkdir(self: Path, *args, **kwargs):
         if self == downloads_dir:
             raise PermissionError("read-only")
         return original_mkdir(self, *args, **kwargs)
 
-    monkeypatch.setattr(pvc.Path, "mkdir", fake_mkdir)
+    monkeypatch.setattr(Path, "mkdir", fake_mkdir)
 
     with pytest.raises(pvc.PreflightError) as excinfo:
         pvc.ensure_directories(
@@ -72,7 +79,11 @@ def test_ensure_directories_raises_when_directory_creation_fails(
             pgid=1000,
         )
 
-    assert "Unable to create downloads directory" in str(excinfo.value)
+    message = str(excinfo.value)
+
+    assert "Unable to create downloads directory" in message
+    assert "read-only" in message
+    assert str(downloads_dir) in message
 
 
 def test_ensure_directories_validates_writability(
