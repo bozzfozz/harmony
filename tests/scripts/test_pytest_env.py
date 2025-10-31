@@ -34,6 +34,7 @@ def test_ensure_pytest_cov_installs_when_missing(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(pytest_env.importlib, "invalidate_caches", lambda: None)
     monkeypatch.setattr(pytest_env, "resolve_pytest_cov_requirement", lambda: "pytest-cov==4.1.0")
     monkeypatch.setattr(pytest_env, "_load_builtin_pytest_cov", lambda: False)
+    monkeypatch.setattr(pytest_env, "_using_builtin_pytest_cov", lambda: False)
 
     def _fake_run(command, **_: object) -> SimpleNamespace:  # type: ignore[override]
         monkeypatch.setattr(
@@ -53,7 +54,7 @@ def test_ensure_pytest_cov_installs_when_missing(monkeypatch: pytest.MonkeyPatch
     assert result.installed is True
     assert result.command == ("pip", "install", "pytest-cov==4.1.0")
     assert result.message == "Installed pytest-cov"
-    assert result.env_updates["PYTEST_ADDOPTS"] == "--cov=app -p pytest_cov.plugin"
+    assert "PYTEST_ADDOPTS" not in result.env_updates
     assert result.env_updates["PYTHONPATH"] == str(pytest_env.REPO_ROOT)
 
 
