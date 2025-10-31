@@ -71,9 +71,17 @@ requirements_files=("requirements.txt")
 [[ -f "requirements-dev.txt" ]] && requirements_files+=("requirements-dev.txt")
 [[ -f "requirements-test.txt" ]] && requirements_files+=("requirements-test.txt")
 
+# FastAPI 0.116.1 currently pins Starlette to <0.48.0, while
+# GHSA-7f5h-v6xp-fcq8 is resolved in Starlette 0.49.1.
+# Track the upstream resolution at https://github.com/advisories/GHSA-7f5h-v6xp-fcq8
+# and remove this ignore once a compatible FastAPI release is available.
+ignore_args=("--ignore-vuln" "GHSA-7f5h-v6xp-fcq8")
+
+printf 'NOTE: Temporarily ignoring GHSA-7f5h-v6xp-fcq8 due to FastAPI/Starlette pinning.\n'
+
 for req_file in "${requirements_files[@]}"; do
   printf '==> pip-audit (%s)\n' "$req_file"
-  if audit_output=$(pip-audit "${audit_flags[@]}" "${config_args[@]}" --strict -r "$req_file" 2>&1); then
+  if audit_output=$(pip-audit "${audit_flags[@]}" "${config_args[@]}" --strict "${ignore_args[@]}" -r "$req_file" 2>&1); then
     printf '%s\n' "$audit_output"
   else
     printf '%s\n' "$audit_output" >&2
