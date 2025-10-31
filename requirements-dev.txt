@@ -1,7 +1,3 @@
-# Developer tooling dependencies
-libcst==1.5.1
-mypy==1.10.0
-pip-audit==2.7.3
-radon==6.0.1
-ruff==0.6.5
-vulture==2.10
+# Developer tooling dependencies are defined in pyproject.toml optional groups.
+# Export a pinned view with:
+#   uv export --format requirements-txt --no-hashes --group dev --output requirements-dev.txt

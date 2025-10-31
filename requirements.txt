@@ -1,18 +1,3 @@
-# Runtime dependencies for Harmony backend
-# FastAPI 0.116.1 is the latest release available on PyPI. Starlette keeps a
-# range specifier (<0.48.0) to honour FastAPI's constraints while a temporary
-# pip-audit waiver covers GHSA-7f5h-v6xp-fcq8 until FastAPI allows >=0.49.1.
-
-fastapi==0.116.1
-starlette<0.48.0,>=0.40
-uvicorn==0.30.6
-sqlalchemy==2.0.31
-aiohttp==3.12.14
-aiosqlite==0.19.0
-spotipy==2.25.1
-pydantic==2.7.1
-httpx==0.27.0
-psutil==5.9.8
-mutagen==1.47.0
-prometheus-client==0.20.0
-Unidecode==1.3.8
+# Runtime dependencies are managed in pyproject.toml.
+# Generate a pinned export if needed:
+#   uv export --format requirements-txt --no-hashes --output requirements.txt
