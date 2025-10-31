@@ -33,7 +33,8 @@ def test_sync_generates_expected_requirements(
         pyproject_contents="""
 [project]
 dependencies = [
-    "fastapi==0.116.3",
+    "fastapi==0.116.1",
+    "starlette==0.49.1",
     "anyio==3.7.1",
 ]
 """,
@@ -45,7 +46,8 @@ dependencies = [
     contents = requirements_path.read_text("utf-8")
     lines = [line for line in contents.splitlines() if line and not line.startswith("#")]
     assert lines == [
-        "fastapi==0.116.3",
+        "fastapi==0.116.1",
+        "starlette==0.49.1",
         "anyio==3.7.1",
     ]
 
@@ -59,7 +61,8 @@ def test_check_rejects_unexpected_dependency(
         pyproject_contents="""
 [project]
 dependencies = [
-    "fastapi==0.116.3",
+    "fastapi==0.116.1",
+    "starlette==0.49.1",
     "anyio==3.7.1",
 ]
 """,
@@ -68,11 +71,11 @@ dependencies = [
     sync.sync_dependencies(check_only=False)
     original = requirements_path.read_text("utf-8")
     requirements_path.write_text(
-        original + "starlette==0.49.1\n",
+        original + "uvicorn==0.30.1\n",
         encoding="utf-8",
     )
 
     with pytest.raises(sync.DependencySyncError) as exc:
         sync.sync_dependencies(check_only=True)
 
-    assert "Unexpected entries in requirements.txt: starlette" in str(exc.value)
+    assert "Unexpected entries in requirements.txt: uvicorn" in str(exc.value)
