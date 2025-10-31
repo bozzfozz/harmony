@@ -8,9 +8,7 @@ import importlib.util
 import os
 from pathlib import Path
 import shlex
-import subprocess
 import sys
-import textwrap
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -24,26 +22,6 @@ class PytestCovSetupResult:
     command: tuple[str, ...] | None
     message: str
     env_updates: dict[str, str]
-
-
-def resolve_pytest_cov_requirement() -> str:
-    """Return the pinned pytest-cov requirement string, if available."""
-
-    requirement_file = REPO_ROOT / "requirements-test.txt"
-    if not requirement_file.exists():
-        return "pytest-cov"
-
-    for raw_line in requirement_file.read_text(encoding="utf-8").splitlines():
-        stripped = raw_line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        token, *_ = stripped.split()
-        if token.startswith("pytest-cov"):
-            return token
-
-    return "pytest-cov"
-
-
 def _coverage_requested(pytest_addopts: str) -> bool:
     return "--cov" in pytest_addopts or "--cov-report" in pytest_addopts
 
@@ -183,10 +161,24 @@ def ensure_pytest_cov(pytest_addopts: str | None = None) -> PytestCovSetupResult
         )
 
     if _ensure_pytest_cov_available():
-        if _using_builtin_pytest_cov():
-            updated_addopts, mutated = _inject_plugin_flag(addopts)
-            if mutated:
-                env_updates["PYTEST_ADDOPTS"] = updated_addopts
+        if not _using_builtin_pytest_cov():
+            pythonpath_update = _pythonpath_with_repo(os.getenv("PYTHONPATH"))
+            if pythonpath_update is not None:
+                env_updates["PYTHONPATH"] = pythonpath_update
+            return PytestCovSetupResult(
+                required=True,
+                installed=False,
+                command=None,
+                message=(
+                    "External pytest-cov package detected; uninstall it to use Harmony's "
+                    "built-in coverage plugin."
+                ),
+                env_updates=env_updates,
+            )
+
+        updated_addopts, mutated = _inject_plugin_flag(addopts)
+        if mutated:
+            env_updates["PYTEST_ADDOPTS"] = updated_addopts
         pythonpath_update = _pythonpath_with_repo(os.getenv("PYTHONPATH"))
         if pythonpath_update is not None:
             env_updates["PYTHONPATH"] = pythonpath_update
@@ -197,48 +189,17 @@ def ensure_pytest_cov(pytest_addopts: str | None = None) -> PytestCovSetupResult
             message="pytest-cov already available",
             env_updates=env_updates,
         )
-    requirement = resolve_pytest_cov_requirement()
-    command = ("pip", "install", requirement)
-    completed = subprocess.run(
-        list(command),
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if completed.returncode == 0:
-        importlib.invalidate_caches()
-        if _ensure_pytest_cov_available():
-            if _using_builtin_pytest_cov():
-                updated_addopts, mutated = _inject_plugin_flag(addopts)
-                if mutated:
-                    env_updates["PYTEST_ADDOPTS"] = updated_addopts
-            pythonpath_update = _pythonpath_with_repo(os.getenv("PYTHONPATH"))
-            if pythonpath_update is not None:
-                env_updates["PYTHONPATH"] = pythonpath_update
-            return PytestCovSetupResult(
-                required=True,
-                installed=True,
-                command=command,
-                message="Installed pytest-cov",
-                env_updates=env_updates,
-            )
-        return PytestCovSetupResult(
-            required=True,
-            installed=False,
-            command=command,
-            message="pytest-cov installation reported success but module still missing",
-            env_updates=env_updates,
-        )
 
-    message = textwrap.shorten(
-        (completed.stderr or completed.stdout or "pip install pytest-cov failed").strip(),
-        width=240,
-    )
+    pythonpath_update = _pythonpath_with_repo(os.getenv("PYTHONPATH"))
+    if pythonpath_update is not None:
+        env_updates["PYTHONPATH"] = pythonpath_update
     return PytestCovSetupResult(
         required=True,
         installed=False,
-        command=command,
-        message=message,
+        command=None,
+        message=(
+            "Harmony's bundled pytest-cov plugin could not be loaded; ensure the repository "
+            "is available on PYTHONPATH and reinstall the package if necessary."
+        ),
         env_updates=env_updates,
     )

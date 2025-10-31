@@ -267,15 +267,16 @@ class PytestCovFixer(Fixer):
         )
         setup = pytest_env.ensure_pytest_cov(context.env.get("PYTEST_ADDOPTS"))
 
-        command_display = (
-            " ".join(setup.command) if setup.command else "pytest-cov already available"
+        command_display = " ".join(setup.command) if setup.command else None
+        command_field = command_display or (
+            "pytest-cov builtin" if setup.installed else "pytest-cov unavailable"
         )
         logger.emit(
             step="FIX",
             why="Installing pytest-cov dependency"
             if setup.command
-            else "pytest-cov already installed",
-            command=command_display,
+            else ("pytest-cov already installed" if setup.installed else "pytest-cov unavailable"),
+            command=command_field,
             result="OK" if setup.installed else "ERROR",
             nxt="VERIFY" if setup.installed else "DONE",
         )
@@ -284,13 +285,13 @@ class PytestCovFixer(Fixer):
             logger.emit(
                 step="VERIFY",
                 why="pytest-cov installation completed" if setup.command else "pytest-cov present",
-                command=command_display,
+                command=command_field,
                 result="OK",
                 nxt="RE-RUN" if setup.command else "DONE",
             )
 
-        warnings = [] if setup.installed else ["Install pytest-cov manually and re-run tests"]
-        commands = [command_display] if setup.command else []
+        warnings = [] if setup.installed else [setup.message]
+        commands = [command_display] if command_display else []
         return FixOutcome(
             issue_id=self.issue_id,
             description=self.description,
@@ -379,7 +380,7 @@ class AutoRepairEngine:
                         commands=(command_display,),
                         warnings=()
                         if setup.installed
-                        else ("Install pytest-cov manually and re-run tests",),
+                        else (setup.message,),
                     )
                 )
             if setup.required and not setup.installed:
@@ -399,7 +400,7 @@ class AutoRepairEngine:
                             status="warn" if self._warn_mode else "error",
                             message=setup.message,
                             commands=(),
-                            warnings=("Install pytest-cov manually and re-run tests",),
+                            warnings=(setup.message,),
                         )
                     )
                 self._write_summary(stage_success=False)
