@@ -4,9 +4,11 @@ Harmony verlässt sich weiterhin auf nachvollziehbare lokale Gates. Ergänzend p
 
 ## Pflichtkommandos
 
-Führe vor den Gates einmal `uv sync` aus und starte anschließende Make-Targets
-konsequent via `uv run make <target>`, damit alle Schritte im durch `uv.lock`
-definierten Environment laufen.
+Führe vor den Gates einmal `uv sync --frozen` aus und starte anschließende
+Make-Targets konsequent via `uv run make <target>`, damit alle Schritte im durch
+`uv.lock` definierten Environment laufen. Der Standard-Gate-Lauf besteht aus
+`uv run pip-audit --strict` und `uv run pytest -q`; die Tabelle listet zusätzliche
+Targets und Hilfsskripte für umfassendere Prüfungen.
 
 | Kommando                        | Script                              | Zweck |
 | -------------------------------- | ----------------------------------- | ----- |
@@ -16,7 +18,8 @@ definierten Environment laufen.
 | `uv run make fmt`                | `scripts/dev/fmt.sh`                | Führt `ruff format` und Import-Sortierung (`ruff check --select I --fix`) aus. |
 | `uv run make lint`               | `scripts/dev/lint_py.sh`            | Führt `ruff check --output-format=concise .` und `mypy app tests --config-file mypy.ini` aus. |
 | `uv run make dep-sync`           | `scripts/dev/dep_sync_py.sh`        | Prüft Python-Abhängigkeiten auf fehlende oder ungenutzte Pakete. |
-| `uv run make test`               | `scripts/dev/test_py.sh`            | Erstellt eine SQLite-Testdatenbank unter `.tmp/test.db` und startet `pytest -q`. Benötigt Node.js ≥ 18 für den UI-Bootstrap-Test [`tests/ui/test_ui_bootstrap.py`](../../tests/ui/test_ui_bootstrap.py). |
+| `uv run pip-audit --strict`      | `scripts/dev/pip_audit.sh`          | Auditiert die im Lockfile fixierten Abhängigkeiten ohne Make-Wrapper; Standard-Gate. |
+| `uv run pytest -q`               | `scripts/dev/test_py.sh` (`uv run make test`) | Erstellt eine SQLite-Testdatenbank unter `.tmp/test.db` und führt die Test-Suite schlank aus. Benötigt Node.js ≥ 18 für den UI-Bootstrap-Test [`tests/ui/test_ui_bootstrap.py`](../../tests/ui/test_ui_bootstrap.py). |
 | `uv run make be-verify`          | —                                   | Alias für `make test`; dient als explizites Backend-Gate im `make all`-Lauf. |
 | `uv run make supply-guard`       | `scripts/dev/supply_guard.sh`       | Prüft auf versehentlich eingecheckte Node-Build-Artefakte. |
 | `uv run make smoke`              | `scripts/dev/smoke_unified.sh`      | Startet `uvicorn app.main:app`, pingt bis zu 60 Sekunden `http://127.0.0.1:${APP_PORT}${SMOKE_PATH}` und beendet den Prozess kontrolliert; führt anschließend einen optionalen Readiness-Ping gegen `/api/health/ready?verbose=1` aus (`SMOKE_READY_CHECK=warn` standard, `strict` erzwingt einen Fehler). Optional wird ein vorhandenes Unified-Docker-Image geprüft. |
@@ -33,7 +36,7 @@ definierten Environment laufen.
 
 Damit `uv run make ui-smoke` (oder der in `uv run make release-check` integrierte Lauf) zuverlässig grün wird, müssen lokal folgende Bedingungen erfüllt sein:
 
-- **Python-Abhängigkeiten installiert:** `uvicorn` und `httpx` stammen aus den Backend-Requirements. Installiere sie über `uv sync`.
+- **Python-Abhängigkeiten installiert:** `uvicorn` und `httpx` stammen aus den Backend-Requirements. Installiere sie über `uv sync --frozen`.
 - **Freier API-Port:** Der Test startet `uvicorn` auf dem per `APP_PORT` (Standard: `8080`) aus `app.config` ermittelten Port. Stelle sicher, dass kein anderes Programm auf diesem Port lauscht oder setze `APP_PORT` vorher auf einen freien Port.
 - **Schreibrechte im Repository:** Das Skript legt Log- und Daten-Dateien unter `.tmp/` an (`ui-smoke.log`, `ui-smoke.db`, Downloads/Music-Verzeichnisse). Für schreibgeschützte Mounts oder temporäre Dateisysteme muss ein alternativer Speicherort per `TMPDIR`/`DOWNLOADS_DIR`/`MUSIC_DIR` konfiguriert werden.
 - **Loopback-Erreichbarkeit:** Der Test ruft das UI über `http://127.0.0.1:${APP_PORT}` auf. Lokale Firewalls oder Container-Netzwerkregeln dürfen Verbindungen zum Loopback-Interface nicht blockieren.
@@ -71,7 +74,13 @@ Der Readiness-Self-Check überwacht weiterhin alle Pflicht-Templates sowie `app/
    - `scripts/dev/supply_guard.sh` verhindert eingecheckte Frontend-Build-Artefakte.
    - `scripts/dev/test_py.sh` wird als Pre-Push-Hook ausgeführt und deckt den Pytest-Lauf ab.
    Ein dedizierter JavaScript- oder Frontend-Verify-Hook ist derzeit nicht mehr aktiv.
-5. **Kompletter Gate-Lauf:** `uv run make all`
+5. **Standard-Gate:**
+   ```bash
+   uv run pip-audit --strict
+   uv run pytest -q
+   ```
+   Ergänzend kannst du `uv run make all` oder `uv run make release-check`
+   ausführen, wenn du den aggregierten Workflow bevorzugst.
 6. **Evidence sichern:** Bewahre die wichtigsten Log-Auszüge pro Schritt auf (siehe PR-Checkliste).
 7. **Frontend-/Backend-Wiring dokumentieren:** Erstelle einen Wiring-Report (neue Routen, Worker, Registrierungen) sowie einen Removal-Report für gelöschte Artefakte.
 

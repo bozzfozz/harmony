@@ -3,7 +3,7 @@
 ## Environment preparation
 - Created persistent directories `/config`, `/downloads`, `/music` and provisioned an empty SQLite database at `/config/harmony.db` to mirror the production volume layout.
 - Launched a temporary HTTP server on `127.0.0.1:5030` to satisfy the Soulseekd TCP probe.
-- Network egress is blocked, preventing `uv sync`. Provided lightweight runtime stubs for `sqlalchemy` and `aiosqlite` via `PYTHONPATH=/tmp/harmony_stubs` so the guard could execute offline.
+- Network egress is blocked, preventing `uv sync --frozen`. Provided lightweight runtime stubs for `sqlalchemy` and `aiosqlite` via `PYTHONPATH=/tmp/harmony_stubs` so the guard could execute offline.
 
 ## Executed commands
 ```
