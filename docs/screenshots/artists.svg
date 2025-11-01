@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450">
-  <rect width="800" height="450" fill="#f8fafc" />
-  <rect x="32" y="32" width="240" height="386" rx="18" fill="#ede9fe" stroke="#7c3aed" stroke-width="2" />
-  <text x="52" y="82" font-family="Inter, sans-serif" font-size="20" fill="#5b21b6">Artists</text>
-  <rect x="296" y="32" width="472" height="60" rx="16" fill="#eef2ff" />
-  <rect x="296" y="112" width="472" height="306" rx="20" fill="#ffffff" stroke="#cbd5f5" stroke-width="2" />
-  <text x="316" y="154" font-family="Inter, sans-serif" font-size="18" fill="#1e293b">Releases &amp; Präferenzen</text>
-</svg>

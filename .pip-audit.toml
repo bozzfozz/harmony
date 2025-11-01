@@ -1,7 +1,0 @@
-[tool.pip_audit]
-# Only waive the known Starlette GHSA until FastAPI permits Starlette >=0.49.1.
-# Track remediation progress in CHANGELOG.md and TODO.md.
-ignore-vulns = [
-  "GHSA-7f5h-v6xp-fcq8",
-]
-require-hashes = false
