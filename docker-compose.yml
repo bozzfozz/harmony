@@ -3,15 +3,19 @@ version: "3.8"
 services:
   harmony:
     image: ghcr.io/bozzfozz/harmony:latest
+    build: .
+    # Remove `build` when deploying from a prebuilt registry image.
     container_name: harmony
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Europe/Berlin
+      - UMASK=002
     ports:
+      # Host:container mapping; host port must remain 8080 for ops routing.
       - "8080:8080"
     volumes:
       - ./config:/config
-      - ./downloads:/downloads
-      - ./music:/music
+      - /srv/downloads:/downloads
+      - /srv/music:/music
     restart: unless-stopped
