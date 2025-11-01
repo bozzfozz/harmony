@@ -18,13 +18,8 @@ from uuid import uuid4
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
-from app.config import (
-    DEFAULT_DB_URL_DEV,
-    DEFAULT_DB_URL_PROD,
-    DEFAULT_DB_URL_TEST,
-    HdmConfig,
-    load_runtime_env,
-)
+from app.config import HARMONY_DATABASE_URL, HdmConfig, load_runtime_env
+from app.config.database import get_database_url
 from app.hdm.idempotency import SQLITE_CREATE_TABLE, SQLITE_DELETE, SQLITE_INSERT
 from app.logging import get_logger
 from app.ops.selfcheck_ui import probe_ui_artifacts
@@ -71,12 +66,9 @@ def _resolve_profile(env: Mapping[str, Any]) -> str:
     return normalized
 
 
-def _default_database_url(profile: str) -> str:
-    if profile in {"prod", "staging"}:
-        return DEFAULT_DB_URL_PROD
-    if profile == "test":
-        return DEFAULT_DB_URL_TEST
-    return DEFAULT_DB_URL_DEV
+def _default_database_url(profile: str) -> str:  # noqa: ARG001 - profile retained for compatibility
+    get_database_url()
+    return HARMONY_DATABASE_URL
 
 
 def _parse_enabled_integrations(raw: str | None) -> tuple[str, ...]:

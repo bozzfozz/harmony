@@ -12,12 +12,8 @@ import sys
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
-from app.config import (
-    DEFAULT_DOWNLOADS_DIR,
-    DEFAULT_MUSIC_DIR,
-    resolve_app_port,
-    resolve_default_database_url,
-)
+from app.config import DEFAULT_DOWNLOADS_DIR, DEFAULT_MUSIC_DIR, resolve_app_port
+from app.config.database import get_database_url
 
 APP_HOST = "0.0.0.0"
 DEFAULT_APP_MODULE = "app.main:app"
@@ -362,14 +358,16 @@ def ensure_sqlite_database(url: str) -> None:
 
 
 def ensure_database_url(env: MutableMapping[str, str]) -> str:
-    database_url = env.get("DATABASE_URL")
-    if not database_url:
-        database_url = resolve_default_database_url(env)
-        env["DATABASE_URL"] = database_url
-        log_info("entrypoint", f"DATABASE_URL not provided; using {database_url}.")
-    else:
-        log_info("entrypoint", f"received DATABASE_URL={database_url}")
-    return database_url
+    fixed_url = get_database_url()
+    provided = env.get("DATABASE_URL")
+    if provided and provided != fixed_url:
+        log_info(
+            "entrypoint",
+            "DATABASE_URL provided but will be overridden by Harmony default.",
+        )
+    env["DATABASE_URL"] = fixed_url
+    log_info("entrypoint", f"using fixed DATABASE_URL={fixed_url}")
+    return fixed_url
 
 
 def bootstrap_environment(env: MutableMapping[str, str]) -> BootstrapState:
