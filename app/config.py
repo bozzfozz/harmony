@@ -14,6 +14,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
+from app.config.database import HARMONY_DATABASE_URL, get_database_url
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.utils.priority import parse_priority_map
@@ -1164,9 +1165,7 @@ class Settings:
         )
 
 
-DEFAULT_DB_URL_DEV = "sqlite+aiosqlite:///./harmony.db"
-DEFAULT_DB_URL_PROD = "sqlite+aiosqlite:////config/harmony.db"
-DEFAULT_DB_URL_TEST = "sqlite+aiosqlite:///:memory:"
+DEFAULT_DATABASE_URL_HINT = HARMONY_DATABASE_URL
 DEFAULT_SOULSEEK_URL = "http://localhost:5030"
 DEFAULT_SOULSEEK_PORT = urlparse(DEFAULT_SOULSEEK_URL).port or 5030
 DEFAULT_SPOTIFY_SCOPE = "user-library-read playlist-read-private playlist-read-collaborative"
@@ -2123,30 +2122,20 @@ def _normalise_sqlite_database_url(candidate: str | None, *, default_hint: str) 
     return url.render_as_string(hide_password=False)
 
 
-def _default_database_url_for_profile(profile: str) -> str:
-    if profile == "prod" or profile == "staging":
-        return DEFAULT_DB_URL_PROD
-    if profile == "test":
-        return DEFAULT_DB_URL_TEST
-    return DEFAULT_DB_URL_DEV
-
-
-def resolve_default_database_url(env: Mapping[str, Any]) -> str:
+def resolve_default_database_url(env: Mapping[str, Any]) -> str:  # noqa: ARG001 - env retained for compatibility
     """Return the default SQLite connection string for the given environment."""
 
-    profile, _flags = _resolve_environment_profile(env)
-    return _default_database_url_for_profile(profile)
+    get_database_url()  # Ensure the database directory exists.
+    return HARMONY_DATABASE_URL
 
 
-def _resolve_database_url(env: Mapping[str, Any], explicit: str | None) -> str:
-    profile, _flags = _resolve_environment_profile(env)
-    default_url = _default_database_url_for_profile(profile)
+def _resolve_database_url(
+    env: Mapping[str, Any], explicit: str | None
+) -> str:  # noqa: ARG001 - env retained for compatibility
     if explicit is not None:
-        return _normalise_sqlite_database_url(explicit, default_hint=default_url)
-    candidate = env.get("DATABASE_URL")
-    if candidate:
-        return _normalise_sqlite_database_url(str(candidate), default_hint=default_url)
-    return _normalise_sqlite_database_url(default_url, default_hint=default_url)
+        return _normalise_sqlite_database_url(explicit, default_hint=DEFAULT_DATABASE_URL_HINT)
+    get_database_url()  # Ensure the database directory exists.
+    return HARMONY_DATABASE_URL
 
 
 def _resolve_sync_database_url(database_url: str) -> str:
