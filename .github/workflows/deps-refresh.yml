@@ -47,8 +47,8 @@ jobs:
         run: |
           uv lock --upgrade
 
-      - name: Check lockfile freshness
-        run: uv lock --check
+      - name: Update uv lockfile
+        run: uv lock
 
       - name: Sync environment
         run: uv sync --frozen --project . --group dev --group test
