@@ -13,6 +13,7 @@ from typing import Any, Protocol, TypeAlias, cast
 from sqlalchemy.orm import Session
 
 from app.config import get_env
+from app.runtime.paths import MUSIC_DIR
 from app.core.soulseek_client import SoulseekClient
 from app.db import run_session
 from app.logging import get_logger
@@ -220,7 +221,7 @@ class SyncWorker:
         self._concurrency = max(1, concurrency or self._resolve_concurrency())
         self._cancelled_downloads: set[int] = set()
         self._cancel_lock = asyncio.Lock()
-        self._music_dir = Path(get_env("MUSIC_DIR") or "./music").expanduser()
+        self._music_dir = Path(get_env("MUSIC_DIR") or MUSIC_DIR).expanduser()
         self._retry_provider = get_retry_policy_provider()
         self._retry_config = self._retry_provider.get_retry_policy("sync")
         self._retry_rng = random.Random()

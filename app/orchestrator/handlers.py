@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import WatchlistWorkerConfig, get_env, settings
+from app.runtime.paths import MUSIC_DIR
 from app.core.matching_engine import MusicMatchingEngine
 from app.core.soulseek_client import SoulseekClient
 from app.core.spotify_client import SpotifyClient
@@ -594,7 +595,7 @@ class SyncHandlerDeps:
     artwork_service: ArtworkService | None = None
     lyrics_service: LyricsService | None = None
     music_dir: Path = field(
-        default_factory=lambda: Path(get_env("MUSIC_DIR") or "./music").expanduser()
+        default_factory=lambda: Path(get_env("MUSIC_DIR") or MUSIC_DIR).expanduser()
     )
     external_timeout_ms: int = field(
         default_factory=lambda: _resolve_timeout_ms(get_env("EXTERNAL_TIMEOUT_MS"))
@@ -2712,7 +2713,7 @@ async def fanout_download_completion(
                         try:
                             target_dir = (
                                 deps.music_dir
-                                or Path(get_env("MUSIC_DIR") or "./music").expanduser()
+                                or Path(get_env("MUSIC_DIR") or MUSIC_DIR).expanduser()
                             )
                             organized_path = organize_file(record, target_dir)
                         except FileNotFoundError:
