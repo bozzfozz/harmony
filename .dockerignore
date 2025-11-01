@@ -1,0 +1,48 @@
+# Version control metadata
+.git
+.gitignore
+.gitattributes
+.gitmodules
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+.pipenv/
+pip-wheel-metadata/
+
+# Python caches and compiled artifacts
+__pycache__/
+*.py[cod]
+*.pyd
+.mypy_cache/
+.pytest_cache/
+.pytype/
+.dmypy.json
+
+# Build outputs and distributions
+build/
+dist/
+.eggs/
+*.egg
+*.egg-info/
+*.whl
+wheels/
+
+# Coverage and testing artefacts
+.coverage
+.coverage.*
+.tox/
+.nox/
+htmlcov/
+tests/
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# IDE and tooling metadata
+.idea/
+.vscode/
+.DS_Store
