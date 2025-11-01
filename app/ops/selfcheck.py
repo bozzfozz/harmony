@@ -19,6 +19,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
 from app.config import HARMONY_DATABASE_URL, HdmConfig, load_runtime_env
+from app.runtime.paths import CONFIG_DIR, DOWNLOADS_DIR, MUSIC_DIR
 from app.config.database import get_database_url
 from app.hdm.idempotency import SQLITE_CREATE_TABLE, SQLITE_DELETE, SQLITE_INSERT
 from app.logging import get_logger
@@ -39,8 +40,6 @@ _REQUIRED_ENV_BASE = (
     "SPOTIFY_CLIENT_ID",
     "SPOTIFY_CLIENT_SECRET",
     "OAUTH_SPLIT_MODE",
-    "DOWNLOADS_DIR",
-    "MUSIC_DIR",
 )
 
 _OPTIONAL_ENV_KEYS = ("UMASK", "PUID", "PGID")
@@ -381,37 +380,46 @@ def aggregate_ready(
     oauth["split_mode"] = split_mode
     checks["oauth"] = oauth
 
-    downloads_path = env.get("DOWNLOADS_DIR")
-    music_path = env.get("MUSIC_DIR")
+    downloads_path = DOWNLOADS_DIR
+    music_path = MUSIC_DIR
     oauth_state_path = env.get("OAUTH_STATE_DIR")
 
     paths: dict[str, Any] = {}
-    if downloads_path:
-        downloads_info = check_path_exists_writable(Path(downloads_path))
-        paths["downloads"] = downloads_info
-        if not (
-            downloads_info["exists"] and downloads_info["is_dir"] and downloads_info["writable"]
-        ):
-            issues.append(
-                ReadyIssue(
-                    component="paths",
-                    message="DOWNLOADS_DIR must exist and be writable",
-                    exit_code=EX_OSERR,
-                    details=downloads_info,
-                )
+    config_info = check_path_exists_writable(CONFIG_DIR)
+    paths["config"] = config_info
+    if not (config_info["exists"] and config_info["is_dir"] and config_info["writable"]):
+        issues.append(
+            ReadyIssue(
+                component="paths",
+                message="/config must exist and be writable",
+                exit_code=EX_OSERR,
+                details=config_info,
             )
-    if music_path:
-        music_info = check_path_exists_writable(Path(music_path))
-        paths["music"] = music_info
-        if not (music_info["exists"] and music_info["is_dir"] and music_info["writable"]):
-            issues.append(
-                ReadyIssue(
-                    component="paths",
-                    message="MUSIC_DIR must exist and be writable",
-                    exit_code=EX_OSERR,
-                    details=music_info,
-                )
+        )
+
+    downloads_info = check_path_exists_writable(downloads_path)
+    paths["downloads"] = downloads_info
+    if not (downloads_info["exists"] and downloads_info["is_dir"] and downloads_info["writable"]):
+        issues.append(
+            ReadyIssue(
+                component="paths",
+                message="/downloads must exist and be writable",
+                exit_code=EX_OSERR,
+                details=downloads_info,
             )
+        )
+
+    music_info = check_path_exists_writable(music_path)
+    paths["music"] = music_info
+    if not (music_info["exists"] and music_info["is_dir"] and music_info["writable"]):
+        issues.append(
+            ReadyIssue(
+                component="paths",
+                message="/music must exist and be writable",
+                exit_code=EX_OSERR,
+                details=music_info,
+            )
+        )
     oauth_state_required = bool(split_mode)
     if oauth_state_required:
         if not _has_value(oauth_state_path):
@@ -424,7 +432,7 @@ def aggregate_ready(
                 )
             )
         else:
-            downloads_anchor = Path(downloads_path) if downloads_path else None
+            downloads_anchor = downloads_path
             oauth_state_value = str(oauth_state_path).strip()
             oauth_state_info = check_path_exists_writable(
                 Path(oauth_state_value), anchor=downloads_anchor

@@ -50,7 +50,7 @@ def test_ensure_engine_uses_synchronous_sqlite_url(monkeypatch, tmp_path) -> Non
     monkeypatch.setattr(db, "create_engine", fake_create_engine)
     monkeypatch.setattr(db, "sessionmaker", fake_sessionmaker)
 
-    raw_url = f"sqlite+aiosqlite:///{tmp_path / 'harmony-test.db'}"
+    raw_url = f"sqlite:///{tmp_path / 'harmony-test.db'}"
     monkeypatch.setattr(db, "get_database_url", lambda: raw_url)
 
     try:
@@ -67,7 +67,7 @@ def test_init_db_does_not_raise_missing_greenlet(monkeypatch, tmp_path) -> None:
     db.reset_engine_for_tests()
 
     database_path = tmp_path / "bootstrap.db"
-    raw_url = f"sqlite+aiosqlite:///{database_path}"
+    raw_url = f"sqlite:///{database_path}"
 
     monkeypatch.setenv("PYTEST_CURRENT_TEST", "test-database-bootstrap")
     monkeypatch.setattr(db, "load_config", lambda: None)

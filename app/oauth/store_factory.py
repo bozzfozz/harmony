@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from app.config import AppConfig
+from app.config import AppConfig, DEFAULT_OAUTH_STATE_DIR
 from app.logging import get_logger
 
 from .store_fs import FsOAuthTransactionStore
@@ -34,7 +34,7 @@ def get_oauth_store(
     ttl_seconds = _resolve_ttl_seconds(config)
     ttl = timedelta(seconds=ttl_seconds)
     if getattr(config.oauth, "split_mode", False):
-        base_dir = Path(getattr(config.oauth, "state_dir", "/config/runtime/oauth_state"))
+        base_dir = Path(getattr(config.oauth, "state_dir", DEFAULT_OAUTH_STATE_DIR))
         hash_cv = getattr(config.oauth, "store_hash_code_verifier", True)
         if hash_cv:
             raise TransactionStoreError(

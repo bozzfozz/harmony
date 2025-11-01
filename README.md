@@ -7,11 +7,11 @@
    Legen Sie die persistenten Verzeichnisse an und passen Sie deren Besitzrechte an die Benutzer- und Gruppenkonten an, unter denen der Container laufen soll:
 
    ```bash
-   mkdir -p ./data/config ./data/downloads ./data/music
-   chown -R ${PUID:-1000}:${PGID:-1000} ./data
+   mkdir -p ./config ./downloads ./music
+   chown -R ${PUID:-1000}:${PGID:-1000} ./config ./downloads ./music
    ```
 
-   Die Anwendung legt ihre SQLite-Datenbank fest unter `/config/harmony.db` ab. Stellen Sie sicher, dass das `./data/config`-Verzeichnis für den gewählten `PUID`/`PGID` beschreibbar ist.
+   Die Anwendung legt ihre SQLite-Datenbank fest unter `/config/harmony.db` ab. Downloads und Musik werden direkt unter den im Container gemounteten Pfaden `/downloads` bzw. `/music` abgelegt. Stellen Sie sicher, dass die Verzeichnisse `./config`, `./downloads` und `./music` dem gewählten `PUID`/`PGID` gehören und beschreibbar sind.
 
 2. **Stack starten**
 

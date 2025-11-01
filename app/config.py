@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 import os
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, Literal, Mapping, cast
 from urllib.parse import urlparse
 
 from sqlalchemy import create_engine, text
@@ -15,6 +15,14 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError, SQLAlchemyError
 
 from app.config.database import HARMONY_DATABASE_URL, get_database_url
+from app.runtime.paths import (
+    CONFIG_DIR,
+    DOWNLOADS_DIR,
+    MUSIC_DIR,
+    SQLITE_DATABASE_URL,
+    SQLITE_DB_PATH,
+    ensure_sqlite_db,
+)
 from app.logging import get_logger
 from app.logging_events import log_event
 from app.utils.priority import parse_priority_map
@@ -33,6 +41,9 @@ _LEGACY_APP_PORT_ENV_VARS: tuple[str, ...] = (
 
 _RUNTIME_ENV_CACHE: dict[str, str] | None = None
 
+_STORAGE_ROOT = CONFIG_DIR
+_STORAGE_ENV_DEFAULTS: dict[str, str] = {}
+
 
 @dataclass(slots=True, frozen=True)
 class ConfigTemplateEntry:
@@ -48,7 +59,7 @@ class ConfigTemplateSection:
     entries: tuple[ConfigTemplateEntry, ...]
 
 
-DEFAULT_CONFIG_FILE_PATH = Path("/config/harmony.yml")
+DEFAULT_CONFIG_FILE_PATH = CONFIG_DIR / "harmony.yml"
 
 
 def _load_env_file(path: Path) -> dict[str, str]:
@@ -276,6 +287,35 @@ def _load_yaml_config(path: Path) -> dict[str, str]:
     return _stringify_env_values(flattened)
 
 
+def normalise_storage_directory(
+    raw_value: Any,
+    *,
+    default: str,
+    key: str,
+) -> str:
+    value = str(raw_value).strip() if raw_value is not None else ""
+    if not value:
+        value = default
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        resolved = (_STORAGE_ROOT / candidate).resolve()
+        if not resolved.is_relative_to(_STORAGE_ROOT):
+            raise ValueError(
+                f"{key} must resolve within {_STORAGE_ROOT}; received {value!r}"
+            )
+        candidate = resolved
+    else:
+        candidate = candidate.resolve()
+    return str(candidate)
+
+
+def _apply_storage_env_defaults(env: dict[str, str]) -> None:
+    for key, default in _STORAGE_ENV_DEFAULTS.items():
+        if key not in env:
+            continue
+        env[key] = normalise_storage_directory(env[key], default=default, key=key)
+
+
 def load_runtime_env(
     *,
     env_file: str | os.PathLike[str] | None = None,
@@ -296,6 +336,7 @@ def load_runtime_env(
         env.update(_load_env_file(path))
 
     env.update({key: str(value) for key, value in source.items() if value is not None})
+    _apply_storage_env_defaults(env)
     return env
 
 
@@ -481,8 +522,16 @@ class HdmConfig:
 
     @classmethod
     def from_env(cls, env: Mapping[str, Any]) -> HdmConfig:
-        downloads_dir = str(env.get("DOWNLOADS_DIR") or DEFAULT_DOWNLOADS_DIR)
-        music_dir = str(env.get("MUSIC_DIR") or DEFAULT_MUSIC_DIR)
+        downloads_dir = normalise_storage_directory(
+            env.get("DOWNLOADS_DIR"),
+            default=DEFAULT_DOWNLOADS_DIR,
+            key="DOWNLOADS_DIR",
+        )
+        music_dir = normalise_storage_directory(
+            env.get("MUSIC_DIR"),
+            default=DEFAULT_MUSIC_DIR,
+            key="MUSIC_DIR",
+        )
         backend = _parse_idempotency_backend(env.get("IDEMPOTENCY_BACKEND"))
         sqlite_path = _resolve_idempotency_sqlite_path(env, downloads_dir)
         return cls(
@@ -1165,7 +1214,7 @@ class Settings:
         )
 
 
-DEFAULT_DATABASE_URL_HINT = HARMONY_DATABASE_URL
+DEFAULT_DATABASE_URL_HINT = SQLITE_DATABASE_URL
 DEFAULT_SOULSEEK_URL = "http://localhost:5030"
 DEFAULT_SOULSEEK_PORT = urlparse(DEFAULT_SOULSEEK_URL).port or 5030
 DEFAULT_SPOTIFY_SCOPE = "user-library-read playlist-read-private playlist-read-collaborative"
@@ -1249,14 +1298,17 @@ DEFAULT_EXTERNAL_RETRY_MAX = 3
 DEFAULT_EXTERNAL_BACKOFF_BASE_MS = 250
 DEFAULT_EXTERNAL_JITTER_PCT = 20.0
 
-DEFAULT_DOWNLOADS_DIR = "/downloads"
-DEFAULT_MUSIC_DIR = "/music"
+DEFAULT_DOWNLOADS_DIR = str(DOWNLOADS_DIR)
+DEFAULT_MUSIC_DIR = str(MUSIC_DIR)
+DEFAULT_OAUTH_STATE_DIR = str(CONFIG_DIR / "runtime" / "oauth_state")
 DEFAULT_DOWNLOAD_WORKER_CONCURRENCY = 4
 DEFAULT_DOWNLOAD_BATCH_MAX_ITEMS = 2_000
 DEFAULT_SIZE_STABLE_SECONDS = 30
 DEFAULT_DOWNLOAD_MAX_RETRIES = 5
 DEFAULT_SLSKD_TIMEOUT_SEC = 300
-DEFAULT_MOVE_TEMPLATE = "/music/{Artist}/{Year} - {Album}/{Track:02d} {Title}.{ext}"
+DEFAULT_MOVE_TEMPLATE = (
+    f"{DEFAULT_MUSIC_DIR}/{{Artist}}/{{Year}} - {{Album}}/{{Track:02d}} {{Title}}.{{ext}}"
+)
 
 DEFAULT_WATCHLIST_TIMER_ENABLED = True
 DEFAULT_WATCHLIST_TIMER_INTERVAL_S = 900.0
@@ -1280,6 +1332,15 @@ DEFAULT_RETRY_MAX_ATTEMPTS = 10
 DEFAULT_RETRY_BASE_SECONDS = 60.0
 DEFAULT_RETRY_JITTER_PCT = 0.2
 DEFAULT_RETRY_POLICY_RELOAD_S = 10.0
+
+
+_STORAGE_ENV_DEFAULTS.update(
+    {
+        "DOWNLOADS_DIR": DEFAULT_DOWNLOADS_DIR,
+        "MUSIC_DIR": DEFAULT_MUSIC_DIR,
+        "OAUTH_STATE_DIR": DEFAULT_OAUTH_STATE_DIR,
+    }
+)
 
 
 _CONFIG_TEMPLATE_SECTIONS: tuple[ConfigTemplateSection, ...] = (
@@ -1331,7 +1392,7 @@ _CONFIG_TEMPLATE_SECTIONS: tuple[ConfigTemplateSection, ...] = (
             ConfigTemplateEntry("ARTWORK_DIR", DEFAULT_ARTWORK_DIR, "Artwork cache directory."),
             ConfigTemplateEntry(
                 "OAUTH_STATE_DIR",
-                "/config/runtime/oauth_state",
+                DEFAULT_OAUTH_STATE_DIR,
                 "Directory storing OAuth state files.",
             ),
             ConfigTemplateEntry(
@@ -2125,17 +2186,20 @@ def _normalise_sqlite_database_url(candidate: str | None, *, default_hint: str) 
 def resolve_default_database_url(env: Mapping[str, Any]) -> str:  # noqa: ARG001 - env retained for compatibility
     """Return the default SQLite connection string for the given environment."""
 
-    get_database_url()  # Ensure the database directory exists.
-    return HARMONY_DATABASE_URL
+    ensure_sqlite_db(SQLITE_DB_PATH)
+    return SQLITE_DATABASE_URL
 
 
 def _resolve_database_url(
     env: Mapping[str, Any], explicit: str | None
 ) -> str:  # noqa: ARG001 - env retained for compatibility
-    if explicit is not None:
-        return _normalise_sqlite_database_url(explicit, default_hint=DEFAULT_DATABASE_URL_HINT)
-    get_database_url()  # Ensure the database directory exists.
-    return HARMONY_DATABASE_URL
+    if explicit:
+        logger.warning(
+            "Ignoring explicit DATABASE_URL override; using Harmony default instead.",
+            extra={"event": "config.database.override_ignored"},
+        )
+    ensure_sqlite_db(SQLITE_DB_PATH)
+    return SQLITE_DATABASE_URL
 
 
 def _resolve_sync_database_url(database_url: str) -> str:
@@ -2731,8 +2795,8 @@ def load_config(runtime_env: Mapping[str, Any] | None = None) -> AppConfig:
     oauth_public_host_hint = (_env_value(env, "OAUTH_PUBLIC_HOST_HINT") or "").strip() or None
     oauth_split_mode = _as_bool(_env_value(env, "OAUTH_SPLIT_MODE"), default=False)
     oauth_state_dir = (
-        _env_value(env, "OAUTH_STATE_DIR") or "/config/runtime/oauth_state"
-    ).strip() or "/config/runtime/oauth_state"
+        _env_value(env, "OAUTH_STATE_DIR") or DEFAULT_OAUTH_STATE_DIR
+    ).strip() or DEFAULT_OAUTH_STATE_DIR
     oauth_state_ttl_seconds = max(
         1,
         _as_int(
