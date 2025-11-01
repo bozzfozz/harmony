@@ -11,7 +11,7 @@ MUSIC_DIR="/music"
 DB_PATH="${CONFIG_DIR}/harmony.db"
 
 mkdir -p "${CONFIG_DIR}" "${DOWNLOADS_DIR}" "${MUSIC_DIR}"
-chown -R "${PUID}:${PGID}" "${CONFIG_DIR}"
+chown -R "${PUID}:${PGID}" "${CONFIG_DIR}" "${DOWNLOADS_DIR}" "${MUSIC_DIR}"
 umask "${UMASK}"
 
 if [ ! -f "${DB_PATH}" ]; then
