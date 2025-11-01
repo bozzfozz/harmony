@@ -1,0 +1,5 @@
+#!/command/with-contenv sh
+set -eu
+
+mkdir -p /config /downloads /music /app
+chown -R abc:abc /app
