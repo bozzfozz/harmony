@@ -59,7 +59,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --frozen --project . --group dev --group test
+          uv sync --frozen --project . --extra dev --extra test
 
       - name: Run make release-check
         env:
@@ -77,13 +77,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p reports/release-check
-          uv run --no-sync --group dev --group test make release-check |& tee reports/release-check/release-check.log
+          uv run --no-sync --extra dev --extra test make release-check |& tee reports/release-check/release-check.log
           git diff --exit-code
 
       - name: Verify packaging pipeline
         run: |
           set -euo pipefail
-          uv run --no-sync --group dev --group test make package-verify
+          uv run --no-sync --extra dev --extra test make package-verify
 
       - name: Upload packaging artifacts
         if: always()

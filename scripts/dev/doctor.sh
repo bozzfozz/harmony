@@ -76,7 +76,7 @@ fi
 if command -v ruff >/dev/null 2>&1; then
   log_pass "ruff available"
 else
-  log_fail "ruff missing (install via 'uv sync --group dev' or 'uv tool install ruff')"
+  log_fail "ruff missing (install via 'uv sync --extra dev' or 'uv tool install ruff')"
 fi
 
 check_directory() {
@@ -169,7 +169,7 @@ fi
 
 if to_bool "${DOCTOR_PIP_REQS:-}"; then
   if ! $have_uv; then
-    log_fail "Requirement guard tooling requires uv (install via 'uv sync --group dev')"
+    log_fail "Requirement guard tooling requires uv (install via 'uv sync --extra dev')"
   else
     if output=$(uv run --locked --with pip-check-reqs pip-missing-reqs app 2>&1); then
       log_pass "pip-missing-reqs"
@@ -204,7 +204,7 @@ else
   if $have_uv; then
     log_warn "Requirement guard tooling disabled (set DOCTOR_PIP_REQS=1 to enforce)"
   else
-    log_warn "Requirement guard tooling requires uv (install via 'uv sync --group dev')"
+    log_warn "Requirement guard tooling requires uv (install via 'uv sync --extra dev')"
   fi
 fi
 
