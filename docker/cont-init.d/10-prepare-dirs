@@ -1,5 +1,54 @@
-#!/command/with-contenv sh
-set -eu
+#!/usr/bin/with-contenv bash
+set -euo pipefail
 
-mkdir -p /config /downloads /music /app
-chown -R abc:abc /app
+log_warn() {
+    printf 'warning: %s\n' "$1" >&2
+}
+
+require_numeric() {
+    local value="$1"
+    local name="$2"
+
+    if [[ -z "$value" ]]; then
+        printf '%s environment variable is required\n' "$name" >&2
+        exit 1
+    fi
+
+    if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+        printf '%s must be numeric, got %s\n' "$name" "$value" >&2
+        exit 1
+    fi
+}
+
+PUID=${PUID-}
+PGID=${PGID-}
+UMASK=${UMASK-022}
+
+require_numeric "$PUID" "PUID"
+require_numeric "$PGID" "PGID"
+
+if [[ ! "$UMASK" =~ ^0?[0-7]{3}$ ]]; then
+    log_warn "Invalid UMASK '$UMASK'; falling back to 022"
+    UMASK=022
+fi
+
+readonly CONFIG_DIR="/config"
+readonly DOWNLOADS_DIR="/downloads"
+readonly MUSIC_DIR="/music"
+readonly DB_PATH="${CONFIG_DIR}/harmony.db"
+
+mkdir -p "$CONFIG_DIR" "$DOWNLOADS_DIR" "$MUSIC_DIR"
+chown -R "${PUID}:${PGID}" "$CONFIG_DIR"
+umask "$UMASK"
+
+if [[ ! -e "$DB_PATH" ]]; then
+    s6-setuidgid abc touch "$DB_PATH"
+fi
+
+if ! s6-setuidgid abc test -w "$DOWNLOADS_DIR"; then
+    log_warn "$DOWNLOADS_DIR is not writable by user abc"
+fi
+
+if ! s6-setuidgid abc test -w "$MUSIC_DIR"; then
+    log_warn "$MUSIC_DIR is not writable by user abc"
+fi
