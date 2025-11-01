@@ -22,3 +22,12 @@ def test_app_config_package_reexports(tmp_path: Path) -> None:
 
     assert isinstance(config, AppConfig)
     assert config.environment.is_test is True
+
+
+def test_default_oauth_state_dir_reexport() -> None:
+    """The OAuth state directory constant should be available via ``app.config``."""
+
+    from app.config import DEFAULT_OAUTH_STATE_DIR
+    from app.runtime.paths import CONFIG_DIR
+
+    assert Path(DEFAULT_OAUTH_STATE_DIR) == CONFIG_DIR / "runtime" / "oauth_state"
