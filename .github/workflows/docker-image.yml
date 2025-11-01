@@ -16,6 +16,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Buildx (container driver)
+        uses: docker/setup-buildx-action@v3
+        with:
+          install: true
+          driver: docker-container
+
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
