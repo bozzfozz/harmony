@@ -2,82 +2,49 @@ name: docker-image
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  packages: write
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-  DOCKER_PLATFORMS: linux/amd64
-
 jobs:
-  build-and-push:
+  docker:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Buildx (docker-container)
+      - name: Setup Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          install: true
-          driver: docker-container
-
-      - name: Read app version from source
-        id: ver
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION="$(python - <<'PY'
-          import sys, pathlib
-          sys.path.insert(0, str(pathlib.Path('.').resolve()))
-          from app.version import __version__
-          print(__version__)
-          PY
-          )"
-          # Docker-Tag-Sanitizing: “+” u.ä. sind für Tags ungültig
-          SANITIZED="$VERSION"
-          SANITIZED="${SANITIZED//+/-}"
-          SANITIZED="${SANITIZED// /}"
-          SANITIZED="${SANITIZED//\//-}"
-          echo "version_raw=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "version_tag=$SANITIZED" >> "$GITHUB_OUTPUT"
-
-      - name: Docker metadata (labels only)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # Keine automatischen Tags; wir setzen Tags manuell als “raw”.
-          tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=${{ steps.ver.outputs.version_tag }}
-          # Labels generieren (Quelle, Revision, etc.)
-          labels: |
-            org.opencontainers.image.title=harmony
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ steps.ver.outputs.version_raw }}
 
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Verify Docker assets
+        run: |
+          test -f docker/Dockerfile || (echo "::error::docker/Dockerfile fehlt"; exit 1)
+          head -n 1 docker/services.d/harmony/run | grep -q "/command/with-contenv" || (echo "::error::Shebang in services.d/harmony/run falsch"; exit 1)
+          head -n 1 docker/cont-init.d/10-prepare-dirs | grep -q "/command/with-contenv" || (echo "::error::Shebang in cont-init.d/10-prepare-dirs falsch"; exit 1)
+
+      - name: Build & Push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
+          platforms: linux/amd64
           push: true
-          platforms: ${{ env.DOCKER_PLATFORMS }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/harmony:latest
+            ghcr.io/${{ github.repository_owner }}/harmony:sha-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=harmony
+            org.opencontainers.image.version=latest
