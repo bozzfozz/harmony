@@ -64,7 +64,7 @@ def _install_sqlalchemy_stubs(monkeypatch):
 def test_ensure_database_url_overrides_env(monkeypatch, tmp_path):
     entrypoint = _install_sqlalchemy_stubs(monkeypatch)
     fake_db = tmp_path / "harmony.db"
-    fixed_url = f"sqlite+aiosqlite:///{fake_db}"
+    fixed_url = f"sqlite:///{fake_db}"
 
     monkeypatch.setattr(db_config, "HARMONY_DATABASE_FILE", fake_db, raising=False)
     monkeypatch.setattr(db_config, "HARMONY_DATABASE_URL", fixed_url, raising=False)

@@ -40,6 +40,7 @@ from app.ops.selfcheck_ui import probe_ui_artifacts
 from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
 from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.orchestrator.timer import WatchlistTimer
+from app.runtime.paths import bootstrap_storage
 from app.schemas.system import EnvironmentResponse
 from app.services.health import DependencyStatus, HealthService
 from app.services.oauth_service import ManualRateLimiter, OAuthService
@@ -59,6 +60,7 @@ _APP_START_TIME = datetime.now(UTC)
 _APP_LISTEN_HOST = "0.0.0.0"
 _LIVE_HEALTH_PATH = "/live"
 
+bootstrap_storage()
 
 class ImmutableStaticFiles(StaticFiles):
     cache_control_header = "max-age=86400, immutable"

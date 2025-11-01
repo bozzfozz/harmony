@@ -11,7 +11,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./data/config:/config
-      - ./data/downloads:/downloads
-      - ./data/music:/music
+      - ./config:/config
+      - ./downloads:/downloads
+      - ./music:/music
     restart: unless-stopped

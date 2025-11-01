@@ -12,8 +12,9 @@ import sys
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
-from app.config import DEFAULT_DOWNLOADS_DIR, DEFAULT_MUSIC_DIR, resolve_app_port
+from app.config import resolve_app_port
 from app.config.database import get_database_url
+from app.runtime.paths import CONFIG_DIR, DOWNLOADS_DIR, MUSIC_DIR
 
 APP_HOST = "0.0.0.0"
 DEFAULT_APP_MODULE = "app.main:app"
@@ -385,12 +386,13 @@ def bootstrap_environment(env: MutableMapping[str, str]) -> BootstrapState:
     )
     database_url = ensure_database_url(env)
     directories = {
-        "downloads": env.get("DOWNLOADS_DIR") or DEFAULT_DOWNLOADS_DIR,
-        "music": env.get("MUSIC_DIR") or DEFAULT_MUSIC_DIR,
+        "config": CONFIG_DIR,
+        "downloads": DOWNLOADS_DIR,
+        "music": MUSIC_DIR,
     }
-    for label, raw_path in directories.items():
+    for label, path in directories.items():
         ensured = ensure_directory(
-            raw_path,
+            str(path),
             name=label,
             uid=target_uid,
             gid=target_gid,

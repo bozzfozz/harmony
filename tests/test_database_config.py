@@ -86,15 +86,8 @@ def _dummy_settings() -> object:
 def test_load_config_uses_fixed_database_url(monkeypatch, tmp_path):
     _install_sqlalchemy_stubs(monkeypatch)
     config = _load_config_module()
-    fake_db = tmp_path / "harmony.db"
-    fixed_url = f"sqlite+aiosqlite:///{fake_db}"
-
-    monkeypatch.setattr(db_config, "HARMONY_DATABASE_FILE", fake_db, raising=False)
-    monkeypatch.setattr(db_config, "HARMONY_DATABASE_URL", fixed_url, raising=False)
-    monkeypatch.setattr(db_config, "get_database_url", lambda: fixed_url, raising=False)
-    monkeypatch.setattr(config, "HARMONY_DATABASE_URL", fixed_url, raising=False)
-    monkeypatch.setattr(config, "DEFAULT_DATABASE_URL_HINT", fixed_url, raising=False)
-    monkeypatch.setattr(config, "get_database_url", lambda: fixed_url, raising=False)
+    monkeypatch.setattr(config, "DEFAULT_DATABASE_URL_HINT", db_config.HARMONY_DATABASE_URL, raising=False)
+    monkeypatch.setattr(config, "get_database_url", db_config.get_database_url, raising=False)
     monkeypatch.setattr(config, "_load_settings_from_db", lambda *args, **kwargs: {})
     monkeypatch.setattr(config, "log_event", lambda *args, **kwargs: None)
     monkeypatch.setattr(config.Settings, "load", classmethod(lambda cls, env=None: _dummy_settings()))
@@ -103,4 +96,4 @@ def test_load_config_uses_fixed_database_url(monkeypatch, tmp_path):
 
     app_config = config.load_config(runtime_env)
 
-    assert app_config.database.url == fixed_url
+    assert app_config.database.url == db_config.HARMONY_DATABASE_URL
