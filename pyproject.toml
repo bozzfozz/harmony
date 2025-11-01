@@ -26,7 +26,7 @@ dependencies = [
     "fastapi>=0.115,<0.200",
     "uvicorn[standard]>=0.30,<0.40",
     "sqlalchemy>=2.0.31,<2.1",
-    "aiohttp>=3.9,<3.13",
+    "aiohttp>=3.12,<3.13",
     "aiosqlite>=0.19,<0.20",
     "spotipy>=2.25,<2.26",
     "pydantic>=2.7,<3",
@@ -47,17 +47,13 @@ dev = [
     "ruff >= 0.6, < 0.7",
     "vulture >= 2.10, < 2.11",
 ]
+test = [
+    "pytest >= 8.3, < 9",
+    "pytest-asyncio >= 0.23, < 0.24",
+]
 
 [tool.uv]
-# Keep development dependencies synchronized across tool.uv, dependency groups, and optional extras.
-dev-dependencies = [
-    "libcst >= 1.5, < 1.6",
-    "mypy >= 1.10, < 1.11",
-    "pip-audit >= 2.7, < 2.8",
-    "radon >= 6.0, < 6.1",
-    "ruff >= 0.6, < 0.7",
-    "vulture >= 2.10, < 2.11",
-]
+# Keep development dependencies synchronized across dependency groups and optional extras.
 
 [dependency-groups]
 dev = [
@@ -68,8 +64,24 @@ dev = [
     "ruff >= 0.6, < 0.7",
     "vulture >= 2.10, < 2.11",
 ]
+test = [
+    "pytest >= 8.3, < 9",
+    "pytest-asyncio >= 0.23, < 0.24",
+]
 
-
+[tool.uv.dependency-groups]
+dev = { dependencies = [
+    "libcst >= 1.5, < 1.6",
+    "mypy >= 1.10, < 1.11",
+    "pip-audit >= 2.7, < 2.8",
+    "radon >= 6.0, < 6.1",
+    "ruff >= 0.6, < 0.7",
+    "vulture >= 2.10, < 2.11",
+] }
+test = { dependencies = [
+    "pytest >= 8.3, < 9",
+    "pytest-asyncio >= 0.23, < 0.24",
+] }
 
 [project.scripts]
 harmony-selfcheck = "app.ops.selfcheck:main"

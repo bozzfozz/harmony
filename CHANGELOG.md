@@ -9,8 +9,8 @@ All notable changes to Harmony are documented in this file.
   legacy `requirements*.txt` exports in favour of on-demand `uv export` generation.
 
 ### Fixed
-- Re-pin `aiohttp` to 3.9.5 (while keeping the `<3.13` guard) because PyPI no longer
-  ships Linux wheels for the 3.12.x series, which broke `uv sync --frozen` on CI.
+- Restore support for upstream `aiohttp` wheels by bumping the floor to the 3.12.x
+  series while keeping the `<3.13` guard enforced via `uv.lock`.
 
 ## v1.0.1 — Dependency compatibility patch
 
