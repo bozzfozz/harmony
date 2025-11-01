@@ -1,8 +1,8 @@
 #!/command/with-contenv bash
 set -euo pipefail
 
-: "${PUID:=1000}"
-: "${PGID:=1000}"
+: "${PUID:=911}"
+: "${PGID:=911}"
 : "${UMASK:=002}"
 
 CONFIG_DIR="/config"
