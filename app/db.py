@@ -62,8 +62,9 @@ def _should_reset_database() -> bool:
 
 
 def _build_engine() -> Engine:
+    sync_url = _synchronous_url(make_url(get_database_url()))
     return create_engine(
-        get_database_url(),
+        sync_url,
         future=True,
         connect_args={"check_same_thread": False},
     )
