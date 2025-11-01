@@ -1,30 +1,36 @@
-FROM lscr.io/linuxserver/baseimage-ubuntu:jammy
+FROM lscr.io/linuxserver/baseimage-alpine:3.19
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/opt/harmony
+    PYTHONPATH=/app \
+    VIRTUAL_ENV=/app/.venv \
+    PATH=/app/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN apk add --no-cache python3 py3-pip curl \
+    && apk add --no-cache --virtual .build-deps gcc musl-dev python3-dev libffi-dev
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        python3 \
-        python3-pip \
-        python3-venv \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /config /downloads /music
+WORKDIR /app
 
-WORKDIR /opt/harmony
+RUN python3 -m venv /app/.venv \
+    && /app/.venv/bin/pip install --upgrade pip
 
-COPY requirements.txt /tmp/requirements.txt
+COPY docker/requirements.txt /tmp/requirements.txt
 
-RUN python3 -m pip install --upgrade pip \
-    && python3 -m pip install -r /tmp/requirements.txt
+RUN /app/.venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt \
+    && rm -rf /root/.cache/pip \
+    && apk del .build-deps
 
-COPY app/ /opt/harmony/app/
+COPY app/ /app/app/
+
+RUN mkdir -p /etc/services.d/harmony /config /downloads /music \
+    && chown -R abc:abc /app
+
+COPY docker/services.d/harmony/run /etc/services.d/harmony/run
+RUN chmod +x /etc/services.d/harmony/run
+
+VOLUME ["/config", "/downloads", "/music"]
 
 EXPOSE 8080
 
-ENTRYPOINT ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD curl -fsS http://localhost:8080/live || exit 1
