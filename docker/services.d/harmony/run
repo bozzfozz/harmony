@@ -1,5 +1,26 @@
-#!/command/with-contenv sh
-set -eu
+#!/usr/bin/with-contenv bash
+set -euo pipefail
 
-cd /app/app
-exec /app/.venv/bin/python -m app.runtime.container_entrypoint "$@"
+VENV_DIR="/app/.venv"
+PYTHON_BIN="python3"
+
+if [[ ! -d "${VENV_DIR}" ]]; then
+    "${PYTHON_BIN}" -m venv "${VENV_DIR}"
+    "${VENV_DIR}/bin/python" -m pip install --upgrade pip
+    "${VENV_DIR}/bin/pip" install --no-cache-dir \
+        fastapi \
+        "uvicorn[standard]" \
+        httpx \
+        pydantic \
+        "sqlalchemy>=2.0.31,<2.1" \
+        aiosqlite \
+        aiohttp \
+        spotipy \
+        mutagen \
+        prometheus-client \
+        Unidecode
+fi
+
+export PATH="/app/.venv/bin:${PATH}"
+
+exec s6-setuidgid abc uvicorn app.main:app --host 0.0.0.0 --port 8080
