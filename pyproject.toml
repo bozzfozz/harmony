@@ -40,23 +40,36 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "libcst>=1.5,<1.6",
-    "mypy>=1.10,<1.11",
-    "pip-audit>=2.7,<2.8",
-    "radon>=6.0,<6.1",
-    "ruff>=0.6,<0.7",
-    "vulture>=2.10,<2.11",
+    "libcst >= 1.5, < 1.6",
+    "mypy >= 1.10, < 1.11",
+    "pip-audit >= 2.7, < 2.8",
+    "radon >= 6.0, < 6.1",
+    "ruff >= 0.6, < 0.7",
+    "vulture >= 2.10, < 2.11",
+]
+
+[tool.uv]
+# Keep development dependencies synchronized across tool.uv, dependency groups, and optional extras.
+dev-dependencies = [
+    "libcst >= 1.5, < 1.6",
+    "mypy >= 1.10, < 1.11",
+    "pip-audit >= 2.7, < 2.8",
+    "radon >= 6.0, < 6.1",
+    "ruff >= 0.6, < 0.7",
+    "vulture >= 2.10, < 2.11",
 ]
 
 [dependency-groups]
 dev = [
-    "libcst>=1.5,<1.6",
-    "mypy>=1.10,<1.11",
-    "pip-audit>=2.7,<2.8",
-    "radon>=6.0,<6.1",
-    "ruff>=0.6,<0.7",
-    "vulture>=2.10,<2.11",
+    "libcst >= 1.5, < 1.6",
+    "mypy >= 1.10, < 1.11",
+    "pip-audit >= 2.7, < 2.8",
+    "radon >= 6.0, < 6.1",
+    "ruff >= 0.6, < 0.7",
+    "vulture >= 2.10, < 2.11",
 ]
+
+
 
 [project.scripts]
 harmony-selfcheck = "app.ops.selfcheck:main"
