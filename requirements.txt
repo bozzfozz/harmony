@@ -1,0 +1,15 @@
+aiohttp
+aiosqlite
+anyio
+fastapi
+httpx
+mutagen
+prometheus-client
+psutil
+pydantic>=2.0
+python-multipart
+spotipy
+sqlalchemy
+starlette
+unidecode
+uvicorn[standard]
