@@ -1,17 +1,45 @@
 # Harmony
 
-## Running with Docker
+## Schnellstart (Produktion)
 
-1. Build the image:
+1. **Verzeichnisse vorbereiten**
+
+   Legen Sie die persistenten Verzeichnisse an und passen Sie deren Besitzrechte an die Benutzer- und Gruppenkonten an, unter denen der Container laufen soll:
 
    ```bash
-   docker compose build
+   mkdir -p ./data/config ./data/downloads ./data/music
+   chown -R ${PUID:-1000}:${PGID:-1000} ./data
    ```
 
-2. Start the service in the background:
+   Die Anwendung legt ihre SQLite-Datenbank fest unter `/config/harmony.db` ab. Stellen Sie sicher, dass das `./data/config`-Verzeichnis für den gewählten `PUID`/`PGID` beschreibbar ist.
+
+2. **Stack starten**
 
    ```bash
    docker compose up -d
    ```
 
-The compose file maps the application to port `8080` and stores persistent data under the `./data` directory. On first startup the application initialises its SQLite database at `/config/harmony.db` automatically, ensuring the file exists before use.
+   Der Dienst läuft im Hintergrund und verwendet die in `docker-compose.yml` definierten Umgebungsvariablen (einschließlich `PUID` und `PGID`) für sichere Zugriffsrechte.
+
+3. **Gesundheit prüfen**
+
+   Kontrollieren Sie den Zustand des Containers und die bereitgestellten Endpunkte, um sicherzustellen, dass der Dienst funktionsfähig ist:
+
+   ```bash
+   docker compose ps
+   docker compose logs harmony
+   curl http://localhost:8080/api/health
+   ```
+
+4. **Updates einspielen**
+
+   Führen Sie bei neuen Versionen ein kontrolliertes Update durch:
+
+   ```bash
+   docker compose pull
+   docker compose up -d
+   docker image prune -f
+   ```
+
+   Alternativ können Sie bei lokalen Änderungen `docker compose build` voranstellen. Der Container migriert die Datenbank automatisch und behält bestehende Inhalte unter `/config/harmony.db` bei.
+
