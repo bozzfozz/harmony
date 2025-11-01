@@ -15,9 +15,11 @@ WORKDIR /app
 RUN python3 -m venv /app/.venv \
     && /app/.venv/bin/pip install --upgrade pip
 
-COPY docker/requirements.txt /tmp/requirements.txt
+# Install Python dependencies from the curated production manifest
+COPY docker/requirements.txt /tmp/production-requirements.txt
 
-RUN /app/.venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt \
+RUN /app/.venv/bin/pip install --no-cache-dir -r /tmp/production-requirements.txt \
+    && rm -f /tmp/production-requirements.txt \
     && rm -rf /root/.cache/pip \
     && apk del .build-deps
 
