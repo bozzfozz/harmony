@@ -37,8 +37,11 @@ jobs:
       - name: Pin Python for uv
         run: uv python pin 3.11
 
+      - name: Show uv version
+        run: uv --version
+
       - name: Prune uv cache
-        run: uv cache prune -a
+        run: uv cache prune
 
       - name: Refresh uv.lock
         run: |
