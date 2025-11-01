@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   harmony:
-    image: ghcr.io/bozzfozz/harmony:latest   # dein Build/Release-Image
+    image: ghcr.io/bozzfozz/harmony:latest
     container_name: harmony
     environment:
       - PUID=1000
