@@ -20,7 +20,7 @@ RUN set -eux; \
     cd /tmp/app; \
     uv python pin 3.11; \
     uv sync --frozen --project . --no-dev --python python3 --system; \
-    uv cache prune -a; \
+    uv cache prune; \
     rm -rf /tmp/app
 
 COPY app/ /app/
