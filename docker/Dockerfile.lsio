@@ -1,39 +1,28 @@
-FROM lscr.io/linuxserver/baseimage-alpine:3.19
+FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
-RUN apk add --no-cache \
-        python3 \
-        py3-pip \
-        curl
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --upgrade pip
-
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:${PATH}"
-
-COPY pyproject.toml uv.lock /tmp/app/
-
-RUN set -eux; \
-    cd /tmp/app; \
-    uv python pin 3.11; \
-    uv sync --frozen --project . --no-dev --python python3 --system; \
-    uv cache prune; \
-    rm -rf /tmp/app
-
-COPY app/ /app/
-COPY pyproject.toml /app/
-COPY jinja2/ /app/jinja2/
-
-RUN uv pip install --system --no-deps --editable /app
-COPY docker/lsio/root/ /
+RUN pip install --no-cache-dir --upgrade pip uv
 
 WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+
+RUN uv sync --frozen --no-dev \
+    && uv cache prune
+
+COPY . .
 
 EXPOSE 8080
 
 VOLUME ["/config", "/downloads", "/music"]
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 CMD curl -fsS http://localhost:8080/api/health/ready || exit 1
+
+CMD ["uv", "run", "--no-sync", "python", "-m", "app.runtime"]
