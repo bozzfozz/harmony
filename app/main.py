@@ -20,11 +20,17 @@ from starlette.types import Scope
 from app.api import health as health_api, router_registry
 from app.api.admin_artists import maybe_register_admin_routes
 from app.api.openapi_schema import build_openapi_schema
-from app.config import AppConfig, SecurityConfig, get_env, resolve_app_port, settings
+from app.config import (
+    AppConfig,
+    SecurityConfig,
+    get_env,
+    load_config,
+    resolve_app_port,
+    settings,
+)
 from app.core.config import DEFAULT_SETTINGS
 from app.db import get_session, init_db
 from app.dependencies import (
-    get_app_config,
     get_provider_registry,
     get_soulseek_client,
     get_spotify_client,
@@ -40,7 +46,7 @@ from app.ops.selfcheck_ui import probe_ui_artifacts
 from app.orchestrator.bootstrap import OrchestratorRuntime, bootstrap_orchestrator
 from app.orchestrator.handlers import ARTIST_REFRESH_JOB_TYPE, ARTIST_SCAN_JOB_TYPE
 from app.orchestrator.timer import WatchlistTimer
-from app.runtime.paths import bootstrap_storage
+from app.runtime.paths import SQLITE_DATABASE_URL, bootstrap_storage
 from app.schemas.system import EnvironmentResponse
 from app.services.health import DependencyStatus, HealthService
 from app.services.oauth_service import ManualRateLimiter, OAuthService
@@ -61,6 +67,29 @@ _APP_LISTEN_HOST = "0.0.0.0"
 _LIVE_HEALTH_PATH = "/live"
 
 bootstrap_storage()
+
+
+def _load_validated_config() -> AppConfig:
+    """Load the application configuration and ensure the database URL is supported."""
+
+    config = load_config()
+    configured_url = getattr(getattr(config, "database", None), "url", None)
+    if configured_url != SQLITE_DATABASE_URL:
+        logger.critical(
+            "Harmony refuses to start with unsupported database URL",
+            extra={
+                "event": "startup.database_url_mismatch",
+                "configured_url": configured_url,
+                "expected_url": SQLITE_DATABASE_URL,
+            },
+        )
+        raise RuntimeError(
+            "Harmony is configured to use an unsupported database URL. "
+            "Update the configuration to use the built-in SQLite database."
+        )
+
+    return config
+
 
 class ImmutableStaticFiles(StaticFiles):
     cache_control_header = "max-age=86400, immutable"
@@ -107,7 +136,9 @@ class ImmutableStaticFiles(StaticFiles):
         return response
 
 
-def _initial_orchestrator_status(*, artwork_enabled: bool, lyrics_enabled: bool) -> dict[str, Any]:
+def _initial_orchestrator_status(
+    *, artwork_enabled: bool, lyrics_enabled: bool
+) -> dict[str, Any]:
     return {
         "enabled_jobs": {
             "sync": True,
@@ -176,7 +207,9 @@ def _orchestrator_component_probe(component: str) -> Callable[[], DependencyStat
     return _probe
 
 
-def _build_orchestrator_dependency_probes() -> Mapping[str, Callable[[], DependencyStatus]]:
+def _build_orchestrator_dependency_probes() -> Mapping[
+    str, Callable[[], DependencyStatus]
+]:
     jobs = (
         "sync",
         "matching",
@@ -192,7 +225,9 @@ def _build_orchestrator_dependency_probes() -> Mapping[str, Callable[[], Depende
     probes: dict[str, Callable[[], DependencyStatus]] = {
         "orchestrator:scheduler": _orchestrator_component_probe("scheduler"),
         "orchestrator:dispatcher": _orchestrator_component_probe("dispatcher"),
-        "orchestrator:timer:watchlist": _orchestrator_component_probe("watchlist_timer"),
+        "orchestrator:timer:watchlist": _orchestrator_component_probe(
+            "watchlist_timer"
+        ),
     }
     for job in jobs:
         probes[f"orchestrator:job:{job}"] = _orchestrator_component_probe(job)
@@ -227,7 +262,7 @@ def _build_dependency_probes() -> Mapping[str, Callable[[], DependencyStatus]]:
     return probes
 
 
-_config_snapshot = get_app_config()
+_config_snapshot = _load_validated_config()
 _API_BASE_PATH = _config_snapshot.api_base_path
 
 
@@ -254,7 +289,7 @@ def _accepts_html(request: Request) -> bool:
 
 
 def _should_start_workers(*, config: AppConfig | None = None) -> bool:
-    resolved_config = config or get_app_config()
+    resolved_config = config or _config_snapshot
     worker_env = resolved_config.environment.workers
     if worker_env.enabled_override is not None:
         return worker_env.enabled_override
@@ -271,7 +306,9 @@ def _resolve_watchlist_interval(override: float | None) -> float:
 
 
 def _resolve_visibility_timeout(override: int | None) -> int:
-    resolved = override if override is not None else settings.orchestrator.visibility_timeout_s
+    resolved = (
+        override if override is not None else settings.orchestrator.visibility_timeout_s
+    )
     return max(5, resolved)
 
 
@@ -638,7 +675,7 @@ def override_lifespan_hooks(**overrides: Any) -> Iterator[None]:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     hooks = _lifespan_hooks
-    config = get_app_config()
+    config = _load_validated_config()
     hooks.register_ui_session_metrics()
     hooks.configure_application(config)
     app.state.config_snapshot = config
@@ -685,10 +722,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     worker_env = config.environment.workers
     timer_override = worker_env.watchlist_timer_enabled
     timer_env_enabled = (
-        timer_override if timer_override is not None else settings.watchlist_timer.enabled
+        timer_override
+        if timer_override is not None
+        else settings.watchlist_timer.enabled
     )
     orchestrator_status["watchlist_timer_running"] = False
-    orchestrator_status["watchlist_timer_expected"] = workers_enabled and timer_env_enabled
+    orchestrator_status["watchlist_timer_expected"] = (
+        workers_enabled and timer_env_enabled
+    )
 
     worker_status: dict[str, bool] = {}
     shutdown_invoked = False
@@ -874,7 +915,7 @@ app_oauth_callback.state.oauth_transaction_store = _oauth_store
 
 @app.get("/env", response_model=EnvironmentResponse, tags=["System"])
 async def environment_info() -> EnvironmentResponse:
-    config_snapshot = getattr(app.state, "openapi_config", None) or get_app_config()
+    config_snapshot = getattr(app.state, "openapi_config", None) or _config_snapshot
     environment = config_snapshot.environment
     workers = environment.workers
     features = config_snapshot.features
@@ -975,7 +1016,7 @@ def custom_openapi() -> dict[str, Any]:
     if app.openapi_schema:
         return app.openapi_schema
 
-    config_snapshot = getattr(app.state, "openapi_config", None) or get_app_config()
+    config_snapshot = getattr(app.state, "openapi_config", None) or _config_snapshot
     schema = build_openapi_schema(app, config=config_snapshot)
     app.openapi_schema = schema
     return schema
