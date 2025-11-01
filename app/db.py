@@ -14,6 +14,7 @@ from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_env, load_config
+from app.config.database import get_database_url
 from app.db_migrations import apply_schema_migrations
 
 
@@ -60,13 +61,12 @@ def _should_reset_database() -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _build_engine(database_url: str) -> Engine:
-    url = make_url(database_url)
-    sync_url = _synchronous_url(url)
-    connect_args: dict[str, object] = {}
-    if sync_url.drivername.startswith("sqlite"):
-        connect_args["check_same_thread"] = False
-    return create_engine(sync_url, future=True, connect_args=connect_args)
+def _build_engine() -> Engine:
+    return create_engine(
+        get_database_url(),
+        future=True,
+        connect_args={"check_same_thread": False},
+    )
 
 
 def _dispose_engine() -> None:
@@ -100,16 +100,16 @@ def _prepare_database_file(url: URL, *, reset: bool) -> tuple[Path | None, bool]
 def _ensure_engine(*, auto_init: bool = True) -> None:
     global _engine, SessionLocal, _initializing_db
 
-    config = load_config()
-    database_url = config.database.url
-    target_url = _synchronous_url(make_url(database_url)).render_as_string(hide_password=False)
+    load_config()
+    database_url = get_database_url()
+    target_url = _synchronous_url(make_url(database_url))
 
-    if _engine is not None and str(_engine.url) == target_url:
+    if _engine is not None and _synchronous_url(_engine.url) == target_url:
         return
 
     _dispose_engine()
 
-    _engine = _build_engine(database_url)
+    _engine = _build_engine()
     SessionLocal = sessionmaker(
         bind=_engine,
         autoflush=False,
@@ -150,8 +150,8 @@ def init_db() -> None:
 
     _initializing_db = True
     try:
-        config = load_config()
-        database_url = config.database.url
+        load_config()
+        database_url = get_database_url()
         url = make_url(database_url)
         reset_requested = _should_reset_database()
 
