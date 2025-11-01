@@ -51,7 +51,7 @@ jobs:
         run: uv lock
 
       - name: Sync environment
-        run: uv sync --frozen --project . --group dev --group test
+        run: uv sync --frozen --project . --extra dev --extra test
 
       - name: Determine audit flag
         id: audit_flag

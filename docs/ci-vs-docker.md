@@ -4,14 +4,14 @@ The repository defines two primary GitHub Actions workflows for backend quality 
 
 ## `release-check` workflow
 
-The [`release-check`](../.github/workflows/release-check.yml) workflow runs on release branches, release tags, and manual dispatches. After installing runtime and dev dependencies via `uv sync --frozen --group dev --project .` it executes:
+The [`release-check`](../.github/workflows/release-check.yml) workflow runs on release branches, release tags, and manual dispatches. After installing runtime and dev dependencies via `uv sync --frozen --project . --extra dev --extra test` it executes:
 
-- `uv run --no-sync --group dev make release-check`, which expands to:
+- `uv run --no-sync --extra dev --extra test make release-check`, which expands to:
   - `make all` (Formatierung, Linting, Dependency-Sync, Supply-Guard, Smoke)
   - `make docs-verify`
   - `make pip-audit` (läuft intern mit `--strict`)
   - `make ui-smoke`
-- `uv run --no-sync --group dev make package-verify`, sodass Installation, Wheel-Build und `python -m build` nach jedem Gate reproduzierbar bleiben.
+- `uv run --no-sync --extra dev --extra test make package-verify`, sodass Installation, Wheel-Build und `python -m build` nach jedem Gate reproduzierbar bleiben.
 
 Während des Laufs erzwingt der Workflow einen sauberen `git diff --exit-code`, schreibt strukturierte Logs nach `reports/release-check/release-check.log` und lädt die Artefakte `release-check-logs` sowie `release-packaging-artifacts` hoch.
 
