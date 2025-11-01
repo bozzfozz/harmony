@@ -1,14 +1,17 @@
-version: "3.9"
+version: "3.8"
 
 services:
   harmony:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    user: "${PUID:-1000}:${PGID:-1000}"
+    image: ghcr.io/bozzfozz/harmony:latest   # dein Build/Release-Image
+    container_name: harmony
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Berlin
     ports:
       - "8080:8080"
     volumes:
       - ./data/config:/config
       - ./data/downloads:/downloads
       - ./data/music:/music
+    restart: unless-stopped
