@@ -36,3 +36,5 @@ RUN chmod +x /etc/cont-init.d/10-prepare-dirs /etc/services.d/harmony/run
 VOLUME ["/config", "/downloads", "/music"]
 
 EXPOSE 8080
+
+CMD ["/init"]
