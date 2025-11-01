@@ -10,7 +10,7 @@ dependencies = [
     { name = "fastapi", constraint = ">=0.115,<0.200" },
     { name = "uvicorn", constraint = ">=0.30,<0.40" },
     { name = "sqlalchemy", constraint = ">=2.0.31,<2.1" },
-    { name = "aiohttp", constraint = ">=3.9,<3.13" },
+    { name = "aiohttp", constraint = ">=3.12,<3.13" },
     { name = "aiosqlite", constraint = ">=0.19,<0.20" },
     { name = "spotipy", constraint = ">=2.25,<2.26" },
     { name = "pydantic", constraint = ">=2.7,<3" },
@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [package.metadata]
-provides-extras = ["dev"]
+provides-extras = ["dev", "test"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -33,6 +33,12 @@ dev = [
     { name = "radon", constraint = ">=6.0,<6.1" },
     { name = "ruff", constraint = ">=0.6,<0.7" },
     { name = "vulture", constraint = ">=2.10,<2.11" },
+]
+
+[package.metadata.requires-test]
+test = [
+    { name = "pytest", constraint = ">=8.3,<9" },
+    { name = "pytest-asyncio", constraint = ">=0.23,<0.24" },
 ]
 
 [[package]]
@@ -57,7 +63,7 @@ source = { registry = "https://pypi.org/simple" }
 
 [[package]]
 name = "aiohttp"
-version = "3.9.5"
+version = "3.12.3"
 source = { registry = "https://pypi.org/simple" }
 
 [[package]]
@@ -128,5 +134,40 @@ source = { registry = "https://pypi.org/simple" }
 [[package]]
 name = "vulture"
 version = "2.10"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "pytest"
+version = "8.4.1"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "pytest-asyncio"
+version = "0.23.7"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "iniconfig"
+version = "2.1.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "packaging"
+version = "25.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "pluggy"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "pygments"
+version = "2.19.2"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "typing_extensions"
+version = "4.12.2"
 source = { registry = "https://pypi.org/simple" }
 

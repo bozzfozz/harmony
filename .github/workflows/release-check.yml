@@ -20,12 +20,7 @@ concurrency:
 
 jobs:
   gate:
-    name: release-check (Python ${{ matrix.python-version }})
-    strategy:
-      matrix:
-        python-version:
-          - '3.11'
-          - '3.12'
+    name: release-check (Python 3.11)
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -43,16 +38,25 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v3
         with:
           version: "0.7.0"
 
+      - name: Pin Python for uv
+        run: uv python pin 3.11
+
+      - name: Prune uv cache
+        run: uv cache prune -a
+
+      - name: Check lockfile freshness
+        run: uv lock --check
+
       - name: Install dependencies
         run: |
-          uv sync --frozen --group dev --project .
+          uv sync --frozen --project . --group dev --group test
 
       - name: Run make release-check
         env:
@@ -70,13 +74,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p reports/release-check
-          uv run --no-sync --group dev make release-check |& tee reports/release-check/release-check.log
+          uv run --no-sync --group dev --group test make release-check |& tee reports/release-check/release-check.log
           git diff --exit-code
 
       - name: Verify packaging pipeline
         run: |
           set -euo pipefail
-          uv run --no-sync --group dev make package-verify
+          uv run --no-sync --group dev --group test make package-verify
 
       - name: Upload packaging artifacts
         if: always()

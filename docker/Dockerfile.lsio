@@ -1,4 +1,4 @@
-FROM lscr.io/linuxserver/baseimage-alpine:3.20
+FROM lscr.io/linuxserver/baseimage-alpine:3.19
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -18,8 +18,10 @@ COPY pyproject.toml uv.lock /tmp/app/
 
 RUN set -eux; \
     cd /tmp/app; \
-    uv sync --frozen --no-dev --no-install-project --python python3 --system; \
-    rm -rf /root/.cache/uv /tmp/app
+    uv python pin 3.11; \
+    uv sync --frozen --project . --no-dev --python python3 --system; \
+    uv cache prune -a; \
+    rm -rf /tmp/app
 
 COPY app/ /app/
 COPY pyproject.toml /app/

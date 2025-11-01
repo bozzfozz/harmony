@@ -27,17 +27,28 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.7.0"
+
+      - name: Pin Python for uv
+        run: uv python pin 3.11
+
+      - name: Prune uv cache
+        run: uv cache prune -a
 
       - name: Refresh uv.lock
         run: |
-          uv lock --python 3.11 --python 3.12 --upgrade
+          uv lock --upgrade
+
+      - name: Check lockfile freshness
+        run: uv lock --check
 
       - name: Sync environment
-        run: uv sync --frozen
+        run: uv sync --frozen --project . --group dev --group test
 
       - name: Determine audit flag
         id: audit_flag
@@ -89,10 +100,10 @@ jobs:
           fi
           cat <<'BODY' > pr-body.md
 ## Summary
-- Refresh `uv.lock` dependencies via `uv lock --python 3.11 --python 3.12 --upgrade`.
+- Refresh `uv.lock` dependencies via `uv lock --upgrade`.
 
 ## Checklist
-- [x] Dependencies refreshed with `uv lock --python 3.11 --python 3.12 --upgrade`
+- [x] Dependencies refreshed with `uv lock --upgrade`
 - [ ] `make doctor`
 - [ ] `make all`
 - [ ] `make pip-audit`
