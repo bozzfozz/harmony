@@ -70,7 +70,7 @@ jobs:
         if: steps.audit_flag.outputs.run == 'true'
         run: |
           set -o pipefail
-          uv run pip-audit --strict | tee pip-audit-output.txt
+          uv run --no-sync --extra dev --extra test scripts/dev/pip_audit.sh | tee pip-audit-output.txt
         continue-on-error: true
 
       - name: Capture run metadata
