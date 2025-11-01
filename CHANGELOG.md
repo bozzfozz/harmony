@@ -35,14 +35,14 @@ All notable changes to Harmony are documented in this file.
   GHSA-2c2j-9gv5-cj73 security fix.
 
 ### Platform
-- FastAPI exposes `/live`, `/ready`, `/status` and `/env` so operators can validate deployments, configuration snapshots and external dependencies without touching private routers.【F:app/main.py†L1-L120】【F:app/api/system.py†L1-L260】【F:tests/test_live_endpoint.py†L1-L36】【F:tests/test_system_ready_endpoint.py†L1-L120】【F:tests/test_ready_check.py†L1-L160】【F:tests/test_env_endpoint.py†L1-L80】
+- FastAPI exposes `/live`, `/ready`, `/status` and `/env` so operators can validate deployments, configuration snapshots and external dependencies without touching private routers.【F:app/main.py†L1-L120】【F:app/api/system.py†L1-L260】 Historical regression coverage lived in `tests/test_live_endpoint.py`, `tests/test_system_ready_endpoint.py`, `tests/test_ready_check.py` and `tests/test_env_endpoint.py`.
 
 ### Harmony Download Manager
-- The orchestrator schedules watchlist refresh jobs through `WatchlistTimer` and dispatches artist scan/refresh tasks with idempotent queue writes and observability events, powering automated library upkeep.【F:app/orchestrator/timer.py†L1-L220】【F:app/orchestrator/handlers_artist.py†L1-L200】【F:tests/orchestrator/test_watchlist_timer.py†L1-L200】
+- The orchestrator schedules watchlist refresh jobs through `WatchlistTimer` and dispatches artist scan/refresh tasks with idempotent queue writes and observability events, powering automated library upkeep.【F:app/orchestrator/timer.py†L1-L220】【F:app/orchestrator/handlers_artist.py†L1-L200】 Historical coverage was provided by `tests/orchestrator/test_watchlist_timer.py`.
 
 ### Integrations
-- Spotify support persists playlist metadata, detects stale snapshots and surfaces backfill job history through dedicated APIs to monitor enrichment progress.【F:app/workers/playlist_sync_worker.py†L1-L260】【F:tests/test_playlist_sync_worker.py†L1-L160】【F:app/api/spotify.py†L1-L260】【F:tests/test_spotify_backfill_history.py†L1-L120】
-- Soulseek downloads enrich listings with live queue metadata from `slskd` while tolerating transport failures so operators can triage stalled transfers.【F:app/services/download_service.py†L1-L200】【F:tests/test_download_service.py†L1-L120】
+- Spotify support persists playlist metadata, detects stale snapshots and surfaces backfill job history through dedicated APIs to monitor enrichment progress.【F:app/workers/playlist_sync_worker.py†L1-L260】【F:app/api/spotify.py†L1-L260】 Legacy coverage referenced `tests/test_playlist_sync_worker.py` and `tests/test_spotify_backfill_history.py`.
+- Soulseek downloads enrich listings with live queue metadata from `slskd` while tolerating transport failures so operators can triage stalled transfers.【F:app/services/download_service.py†L1-L200】 Historical regression coverage lived in `tests/test_download_service.py`.
 
 ### Operator UX
-- The server-rendered `/ui/watchlist` surface lets operators pause, resume and reprioritise artists via HTMX fragments with CSRF protection and consistent error handling.【F:app/ui/routes/watchlist.py†L1-L220】【F:tests/ui/test_watchlist_page.py†L1-L160】
+- The server-rendered `/ui/watchlist` surface lets operators pause, resume and reprioritise artists via HTMX fragments with CSRF protection and consistent error handling.【F:app/ui/routes/watchlist.py†L1-L220】 Historical UI coverage lived in `tests/ui/test_watchlist_page.py`.
